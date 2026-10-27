@@ -146,7 +146,7 @@ def evaluar(d: pathlib.Path, simbolos: list, placebos: int = 1000, reps: int = 2
             "rankic_positivas": float((v > 0).mean()), "rankic_media_apertura": float(np.nanmean(ic_ro)),
             "sharpe_top": sharpe52(top), "sharpe_todos": sharpe52(todos),
             "cagr_top": float(np.prod(1 + top) ** (1 / años) - 1), "cagr_todos": float(np.prod(1 + todos) ** (1 / años) - 1),
-            "p_mejor": p_m, "placebo_p50": float(np.nanmedian(plac)), "placebo_p95": p95,
+            "p_mejor": p_m, "placebo_p50": float(np.nanmedian(plac)), "placebo_p95": p95, "placebo_sharpes": plac.tolist(),
             "azar_p50": float(np.nanmedian(azar)), "azar_p95": float(np.nanpercentile(azar, 95)),
             "sharpe_ultimos": sharpe52(ultimos), "cagr_ultimos": float(np.prod(1 + ultimos) ** (1 / años) - 1),
             "condiciones": cond, "aporta": all(cond.values()),
