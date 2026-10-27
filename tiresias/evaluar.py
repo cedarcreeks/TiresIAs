@@ -18,9 +18,12 @@ L = 40                        # velas de historia: el protocolo diario del artí
 ENTRADA = ["open", "high", "low", "close", "volume"]
 
 
-def _lotes(df: pd.DataFrame, H: int, desde: str, lote: int) -> list:
+def _lotes(df: pd.DataFrame, H: int, desde: str, lote: int, solo=None) -> list:
+    """Posiciones a predecir, en lotes. `solo`: sólo esas fechas (la rejilla semanal del S&P 500)."""
     fechas = df.index
-    pos = [i for i, d in enumerate(fechas) if d >= pd.Timestamp(desde) and i >= L - 1 and i + H < len(fechas)]
+    elegidas = None if solo is None else set(pd.to_datetime(list(solo)))
+    pos = [i for i, d in enumerate(fechas) if d >= pd.Timestamp(desde) and i >= L - 1 and i + H < len(fechas)
+           and (elegidas is None or d in elegidas)]
     return [pos[k:k + lote] for k in range(0, len(pos), lote)]
 
 
@@ -36,23 +39,23 @@ def _trayectorias_lote(tok, mod, df: pd.DataFrame, simbolo: str, H: int, N: int,
 
 
 def muestras(tok, mod, df: pd.DataFrame, simbolo: str, H: int, fecha: str, N: int = 10, desde: str = DESDE,
-             lote: int = 100, T: float = 0.6, top_p: float = 0.9) -> np.ndarray:
+             lote: int = 100, T: float = 0.6, top_p: float = 0.9, solo=None) -> np.ndarray:
     """Las N trayectorias [N, H, 6] que `predecir` usó para `fecha`: se rehace su lote entero, con su semilla.
     Sólo es la misma predicción con el mismo `df`, `lote` y dispositivo. La rentabilidad, como aquí abajo: el
     float32 de las trayectorias entre un `float` de Python sigue en float32 (NumPy 2)."""
     i = df.index.get_loc(pd.Timestamp(fecha))
-    for trozo in _lotes(df, H, desde, lote):
+    for trozo in _lotes(df, H, desde, lote, solo):
         if i in trozo:
             return _trayectorias_lote(tok, mod, df, simbolo, H, N, trozo, T, top_p)[trozo.index(i)]
     raise ValueError(f"{fecha} no tiene predicción a {H} sesiones")
 
 
 def predecir(tok, mod, df: pd.DataFrame, simbolo: str, H: int, N: int = 10, desde: str = DESDE,
-             lote: int = 100, T: float = 0.6, top_p: float = 0.9) -> pd.DataFrame:
+             lote: int = 100, T: float = 0.6, top_p: float = 0.9, solo=None) -> pd.DataFrame:
     """Una fila por sesión *t*: cierre, rentabilidad prevista (media de las N), p de subida,
     cuantiles 10/50/90 de la prevista, y la real a H sesiones."""
     fechas, filas = df.index, []
-    for trozo in _lotes(df, H, desde, lote):
+    for trozo in _lotes(df, H, desde, lote, solo):
         z = _trayectorias_lote(tok, mod, df, simbolo, H, N, trozo, T, top_p)
         for j, i in enumerate(trozo):
             c0 = float(df["close"].iloc[i])

@@ -59,3 +59,18 @@ def test_muestras_reproduce_la_prediccion_de_su_fecha(km):
     assert float((z[:, -1, 3] / c0 - 1).mean()) == p.loc[p.fecha == f, "r_prevista"].item()      # exacta
     otro = E.muestras(tok, mod, df, "X", 5, f, N=4, lote=15)
     assert abs(float((otro[:, -1, 3] / c0 - 1).mean()) - p.loc[p.fecha == f, "r_prevista"].item()) > 1e-4
+
+
+def test_solo_predice_las_fechas_pedidas_y_sin_mirar_el_futuro(km):
+    """La rejilla semanal: sólo esas fechas, con su real a H; y la de t no cambia si se inventa el futuro."""
+    tok, mod = km
+    df = _df()
+    rejilla = list(df.index[E.L + 30::5])
+    p = E.predecir(tok, mod, df, "X", H=5, N=4, lote=8, solo=rejilla)
+    assert set(p["fecha"]) == {str(d.date()) for d in rejilla if df.index.get_loc(d) + 5 < len(df)}
+    otro = df.copy()
+    corte = pd.Timestamp(p["fecha"].iloc[3])
+    otro.loc[otro.index > corte, ["open", "high", "low", "close"]] *= 1.7
+    q = E.predecir(tok, mod, otro, "X", H=5, N=4, lote=8, solo=rejilla)
+    hasta = p["fecha"] <= str(corte.date())
+    pd.testing.assert_frame_equal(p.loc[hasta, ["r_prevista", "p_subida"]], q.loc[hasta, ["r_prevista", "p_subida"]])
