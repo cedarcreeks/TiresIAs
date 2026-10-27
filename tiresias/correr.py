@@ -14,7 +14,6 @@ import platform
 import subprocess
 import time
 
-import pandas as pd
 import torch
 
 from tiresias import datos as D

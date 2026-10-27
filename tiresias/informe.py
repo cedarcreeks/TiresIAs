@@ -20,8 +20,10 @@ PASO = {1: 1, 5: 5}                   # diario y semanal
 
 
 def cargar(d: pathlib.Path, simbolos: list, H: int) -> tuple:
-    preds = {s: pd.read_csv(d / f"pred_{s}_H{H}.csv") for s in simbolos}
-    velas = {s: pd.read_csv(d / f"velas_{s}.csv", index_col=0, parse_dates=True) for s in simbolos}
+    # round_trip: el parser rápido de read_csv yerra el último bit en ~98 % de las filas (medido)
+    preds = {s: pd.read_csv(d / f"pred_{s}_H{H}.csv", float_precision="round_trip") for s in simbolos}
+    velas = {s: pd.read_csv(d / f"velas_{s}.csv", index_col=0, parse_dates=True, float_precision="round_trip")
+             for s in simbolos}
     return preds, velas
 
 

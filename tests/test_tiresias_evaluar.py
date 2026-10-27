@@ -44,3 +44,18 @@ def test_cambiar_el_futuro_no_cambia_la_prediccion(km):
     hasta = a["fecha"] <= corte
     pd.testing.assert_frame_equal(a.loc[hasta, cols], b.loc[hasta, cols])
     assert not a.loc[~hasta, "r_real"].equals(b.loc[~hasta, "r_real"]), "el montaje: el futuro sí cambió"
+
+
+def test_muestras_reproduce_la_prediccion_de_su_fecha(km):
+    """El ejemplo del informe rehace el lote de su fecha: la media de sus trayectorias es la r_prevista que
+    `predecir` guardó. Con otro tamaño de lote (otra semilla y otro azar compartido) ya no lo sería."""
+    tok, mod = km
+    df = _df()
+    p = E.predecir(tok, mod, df, "X", H=5, N=4, lote=16)
+    f = p["fecha"].iloc[20]                                   # en el segundo lote
+    z = E.muestras(tok, mod, df, "X", 5, f, N=4, lote=16)
+    c0 = float(df.loc[f, "close"])        # float de Python, como en `predecir` (con np.float64 cambia el redondeo)
+    assert z.shape == (4, 5, 6)
+    assert float((z[:, -1, 3] / c0 - 1).mean()) == p.loc[p.fecha == f, "r_prevista"].item()      # exacta
+    otro = E.muestras(tok, mod, df, "X", 5, f, N=4, lote=15)
+    assert abs(float((otro[:, -1, 3] / c0 - 1).mean()) - p.loc[p.fecha == f, "r_prevista"].item()) > 1e-4

@@ -168,3 +168,46 @@ def coste_equilibrio(velas: pd.DataFrame, dec: pd.Series, paso: int, cagr_bh: fl
         m = (lo + hi) / 2
         lo, hi = (m, hi) if cagr(estrategia(velas, dec, paso, m)) > cagr_bh else (lo, m)
     return (lo + hi) / 2
+
+
+# ── diagnóstico de la predicción, valor a valor ──────────────────────────
+def wilson(k: int, n: int, z: float = 1.645) -> tuple:
+    """Intervalo de Wilson de una proporción k/n (por defecto, del 90 %)."""
+    if n == 0:
+        return (float("nan"), float("nan"))
+    p = k / n
+    c = (p + z * z / (2 * n)) / (1 + z * z / n)
+    m = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return (c - m, c + m)
+
+
+def acierto(p: pd.DataFrame) -> dict:
+    """Cuántas veces sube cuando Kronos dice que sube (p de subida > 0,5) y cuando dice que baja, frente a la
+    frecuencia con que sube sin más. Si no sabe nada, las tres salen parecidas."""
+    sube, dice = (p["r_real"] > 0).to_numpy(), (p["p_subida"] > 0.5).to_numpy()
+    k1, n1, k0, n0 = int(sube[dice].sum()), int(dice.sum()), int(sube[~dice].sum()), int((~dice).sum())
+    return {"n": len(p), "base": float(sube.mean()), "dice_sube": float(dice.mean()),
+            "sube_si_dice_sube": k1 / n1 if n1 else float("nan"), "ic_dice_sube": wilson(k1, n1), "n_dice_sube": n1,
+            "sube_si_dice_baja": k0 / n0 if n0 else float("nan"), "ic_dice_baja": wilson(k0, n0), "n_dice_baja": n0}
+
+
+def cobertura(p: pd.DataFrame) -> float:
+    """Fracción de veces en que lo real cae entre sus percentiles 10 y 90 (bordes incluidos): un 80 % si su
+    incertidumbre es honesta; menos, si se cree más seguro de lo que es."""
+    return float(((p["r_real"] >= p["r_p10"]) & (p["r_real"] <= p["r_p90"])).mean())
+
+
+def mae_relativo(p: pd.DataFrame) -> float:
+    """Error absoluto medio de la rentabilidad prevista entre el de decir «no cambia» (prever 0). < 1, mejor."""
+    return float((p["r_prevista"] - p["r_real"]).abs().mean() / p["r_real"].abs().mean())
+
+
+def calibracion(p: pd.DataFrame) -> pd.DataFrame:
+    """Por cada probabilidad de subida (0, 0,1… 1 con N = 10): cuántas veces, y con qué frecuencia subió de verdad,
+    con su intervalo de Wilson del 90 %."""
+    g = pd.DataFrame({"p": p["p_subida"].round(1), "sube": p["r_real"] > 0}).groupby("p")["sube"]
+    t = pd.DataFrame({"n": g.size(), "k": g.sum().astype(int)})
+    t["frecuencia"] = t["k"] / t["n"]
+    ic = [wilson(k, n) for k, n in zip(t["k"], t["n"])]
+    t["lo"], t["hi"] = [a for a, _ in ic], [b for _, b in ic]
+    return t
