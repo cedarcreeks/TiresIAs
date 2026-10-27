@@ -386,7 +386,7 @@ def sample_from_logits(logits, temperature=1.0, top_k=None, top_p=None, sample_l
     return x
 
 
-def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context, pred_len, clip=5, T=1.0, top_k=0, top_p=0.99, sample_count=5, verbose=False):
+def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context, pred_len, clip=5, T=1.0, top_k=0, top_p=0.99, sample_count=5, verbose=False, return_samples=False):
     with torch.no_grad():
         x = torch.clip(x, -clip, clip)
 
@@ -464,6 +464,10 @@ def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context
         z = tokenizer.decode(input_tokens, half=True)
         z = z.reshape(-1, sample_count, z.size(1), z.size(2))
         preds = z.cpu().numpy()
+        if return_samples:
+            # TiresIAs: every sampled trajectory (batch, sample_count, seq, feat),
+            # not only their mean: the spread is what gives a probability of a rise.
+            return preds
         preds = np.mean(preds, axis=1)
 
         return preds
