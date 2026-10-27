@@ -291,7 +291,11 @@ class RotaryPositionalEmbedding(nn.Module):
         self.sin_cached = None
 
     def _update_cos_sin_cache(self, x, seq_len):
-        if seq_len != self.seq_len_cached:
+        # TiresIAs: the cache was keyed only by seq_len. After moving the model to
+        # another device (cpu -> mps/cuda) the cached cos/sin stayed on the old
+        # device and the next forward raised "Expected all tensors to be on the
+        # same device". Recompute when the device changes too.
+        if seq_len != self.seq_len_cached or self.cos_cached is None or self.cos_cached.device != x.device:
             self.seq_len_cached = seq_len
             t = torch.arange(seq_len, device=x.device).type_as(self.inv_freq)
             freqs = torch.einsum('i,j->ij', t, self.inv_freq)
