@@ -31,6 +31,8 @@ def main(argv=None) -> int:
     ap.add_argument("--N", type=int, default=10)
     ap.add_argument("--lote", type=int, default=100)
     ap.add_argument("--salida", required=True)
+    ap.add_argument("--sin-volumen", action="store_true",
+                    help="volumen e importe a cero: el protocolo de cripto del artículo (sólo OHLC)")
     a = ap.parse_args(argv)
     sal = pathlib.Path(a.salida).expanduser()
     sal.mkdir(parents=True, exist_ok=True)
@@ -39,10 +41,13 @@ def main(argv=None) -> int:
                             cwd=pathlib.Path(__file__).resolve().parent.parent).stdout.strip()
     meta = {"commit": commit, "dispositivo": a.dispositivo, "torch": torch.__version__, "maquina": platform.node(),
             "fin": a.fin, "dia_descarga": a.dia or dt.date.today().isoformat(), "N": a.N, "lote": a.lote,
-            "L": E.L, "desde": E.DESDE, "inicio": dt.datetime.now().isoformat(timespec="seconds"), "tiempos": {}}
+            "L": E.L, "desde": E.DESDE, "inicio": dt.datetime.now().isoformat(timespec="seconds"), "tiempos": {},
+            "sin_volumen": a.sin_volumen}
     for s in a.simbolos:
         df = D.velas(s, a.fin, a.dia)
         df.to_csv(sal / f"velas_{s}.csv")
+        if a.sin_volumen:
+            df = df.assign(volume=0.0)                      # y el importe sale 0 (volumen × precio)
         for H in a.H:
             t0 = time.perf_counter()
             p = E.predecir(tok, mod, df, s, H, N=a.N, lote=a.lote)

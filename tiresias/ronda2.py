@@ -68,13 +68,70 @@ def u2(dsp: pathlib.Path) -> dict:
     return r
 
 
+# ── U5 · bitcoin ─────────────────────────────────────────────────────────
+COSTE_BTC = 0.0149
+
+
+def e006(cierres: pd.Series, sma: int = 200) -> pd.Series:
+    """La regla de la incubadora: dentro si el cierre supera su media de 200 (que incluye el de hoy)."""
+    return cierres > cierres.rolling(sma).mean()
+
+
+def con_veto(regla: pd.Series, kronos_sube: pd.Series) -> pd.Series:
+    """La regla con el veto de Kronos SÓLO a las entradas: entra el primer día en que la regla está dentro y Kronos da
+    más de 0,5 de subida; sale cuando sale la regla. Un día sin opinión de Kronos no deja entrar."""
+    k = kronos_sube.reindex(regla.index).fillna(False).astype(bool)
+    out, dentro = [], False
+    for r, ks in zip(regla.to_numpy(), k.to_numpy()):
+        dentro = bool(r) and (dentro or ks)
+        out.append(dentro)
+    return pd.Series(out, index=regla.index)
+
+
+def curva_regla(cierres: pd.Series, dentro: pd.Series, coste: float = COSTE_BTC) -> pd.Series:
+    """La señal del cierre d decide el día siguiente (como E006 en la incubadora), de cierre a cierre, con coste por cambio."""
+    pos = dentro.astype(float).shift(1).fillna(0.0)
+    r = cierres.pct_change().fillna(0.0)
+    cambio = pos.diff().abs().fillna(pos.abs())
+    return (1 + pos * r - coste * cambio).cumprod()
+
+
+def u5(cinco: pathlib.Path, btc_usd: pathlib.Path, desde: str = "2024-07-01", reps: int = 10000) -> dict:
+    p = pd.read_csv(btc_usd, float_precision="round_trip")
+    q = X.sin_solape(p, 5)
+    ic = X.spearman(q["r_prevista"], q["r_real"])
+    rem = X.ic_remuestreado({"BTC-USD": q}, reps, 0)[:, 0]
+    eur = pd.read_csv(cinco / "velas_BTC-EUR.csv", index_col=0, parse_dates=True, float_precision="round_trip")["close"]
+    regla = e006(eur)
+    ks = pd.Series((p["p_subida"] > 0.5).to_numpy(), index=pd.to_datetime(p["fecha"]))
+    tramo = regla.loc[desde:]
+    sola = curva_regla(eur.loc[desde:], tramo)
+    veto = curva_regla(eur.loc[desde:], con_veto(tramo, ks))
+    sem_s, sem_v = X.semanales(sola), X.semanales(veto)
+    cambios = lambda d: int(d.astype(int).diff().abs().fillna(d.astype(int)).sum())      # noqa: E731
+    return {"rankic": ic, "p": float(np.mean(rem <= 0)), "fechas_sin_solape": len(q),
+            "sharpe_e006": X.sharpe(sem_s), "sharpe_veto": X.sharpe(sem_v), "p_mejor": X.p_mejor(sem_v, sem_s),
+            "cagr_e006": X.cagr(sola), "cagr_veto": X.cagr(veto),
+            "operaciones_e006": cambios(tramo), "operaciones_veto": cambios(con_veto(tramo, ks))}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="orden", required=True)
     a2 = sub.add_parser("u2")
     a2.add_argument("--sp500", required=True)
     a2.add_argument("--salida", required=True)
+    a5 = sub.add_parser("u5")
+    a5.add_argument("--cinco", required=True)
+    a5.add_argument("--pred", required=True, help="predicciones de BTC-USD a 5 con su protocolo de cripto")
+    a5.add_argument("--salida", required=True)
     a = ap.parse_args(argv)
+    if a.orden == "u5":
+        r = u5(pathlib.Path(a.cinco).expanduser(), pathlib.Path(a.pred).expanduser())
+        pathlib.Path(a.salida).expanduser().write_text(json.dumps(r, indent=1), encoding="utf-8")
+        print(f"U5 · BTC-USD sin volumen: RankIC {r['rankic']:+.4f} (p {r['p']:.3f}, {r['fechas_sin_solape']} fechas) · "
+              f"E006 sola Sharpe {r['sharpe_e006']:.2f} ({r['operaciones_e006']} cambios) · con veto "
+              f"{r['sharpe_veto']:.2f} ({r['operaciones_veto']} cambios) · P(mejor) {r['p_mejor']:.2f}")
     if a.orden == "u2":
         r = u2(pathlib.Path(a.sp500).expanduser())
         pathlib.Path(a.salida).expanduser().write_text(json.dumps(r, indent=1), encoding="utf-8")
