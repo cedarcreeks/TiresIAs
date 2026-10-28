@@ -18,8 +18,8 @@ def test_escapa_lo_que_rompe_latex():
     assert F._esc("A&B 5% x_y") == r"A\&B 5\% x\_y"
 
 
-def _rep(k, n, distintas=0):
-    return {"media": {"k_ric_precios": k, "n_ric_precios": n, "k_ric_rentab": 0.01},
+def _rep(kp, np_, kr=0.04, nr=0.02, distintas=0):
+    return {"media": {"k_ric_precios": kp, "n_ric_precios": np_, "k_ric_rentab": kr, "n_ric_rentab": nr},
             "por_valor": {"A": {"predicciones_distintas_de_lo_guardado": distintas}}}
 
 
@@ -29,8 +29,9 @@ DIAG = {"semanas": 116, "minima_detectable": 0.021, "ic90": (-0.015, 0.02), "fia
 
 def test_seccion_algo_mal_cada_rama():
     from tiresias import informe_pdf as B
-    gana_recta = "\n".join(F.seccion_algo_mal(B.Cifras(), DIAG, _rep(0.02, 0.03)))
-    gana_kronos = "\n".join(F.seccion_algo_mal(B.Cifras(), DIAG, _rep(0.03, 0.02)))
-    assert "La recta ingenua saca tanto o más" in gana_recta and "Kronos saca algo más" in gana_kronos
-    assert "al último bit" in gana_recta
-    assert "alguna predicción rehecha no coincide" in "\n".join(F.seccion_algo_mal(B.Cifras(), DIAG, _rep(0.02, 0.03, 1)))
+    txt = lambda r: "\n".join(F.seccion_algo_mal(B.Cifras(), DIAG, r))          # noqa: E731
+    a = txt(_rep(0.012, 0.020, 0.038, 0.016))
+    assert "En precios, la recta saca tanto o más; en rentabilidad paso a paso, gana Kronos" in a
+    assert "En precios, gana Kronos; en rentabilidad paso a paso, la recta saca tanto o más" in txt(_rep(0.03, 0.02, 0.01, 0.02))
+    assert "al último bit" in a and "reentrena" in a
+    assert "alguna predicción rehecha no coincide" in txt(_rep(0.012, 0.02, distintas=1))

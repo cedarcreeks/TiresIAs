@@ -206,12 +206,12 @@ def extras(d5: pathlib.Path) -> dict:
 
 def seccion_algo_mal(cf, diag: dict, rep: dict) -> list:
     """¿Hicimos algo mal? Cada comprobación con su cifra; la comparación con su métrica, con una rama por resultado."""
-    k, n = rep["media"], rep["media"]
+    k = rep["media"]
     iguales = all(v["predicciones_distintas_de_lo_guardado"] == 0 for v in rep["por_valor"].values())
-    vs = (r"La recta ingenua saca tanto o más que Kronos: lo que mide esa métrica lo da una regla sin modelo."
-          if k["k_ric_precios"] <= n["n_ric_precios"] else
-          r"Kronos saca algo más que la recta: su métrica capta algo, pero es parecido de caminos, no una ventaja operable "
-          r"(las pruebas 1 y 3 lo operan y pierden).")
+    quien = lambda a, b: "gana Kronos" if a > b else "la recta saca tanto o más"     # noqa: E731
+    vs = (r"En precios, " + quien(k["k_ric_precios"], k["n_ric_precios"]) + r"; en rentabilidad paso a paso, "
+          + quien(k["k_ric_rentab"], k["n_ric_rentab"]) + r". Sea cual sea su cálculo, mide parecido de caminos, no una "
+          r"ventaja que se pueda operar: las pruebas 1 y 3 lo operan y pierden.")
     filas = [
         [r"¿Usamos el modelo como sus autores?", r"\textbf{Sí}",
          r"Los pesos de su test de regresión, que pasa en el Mac y en el Windows; las trayectorias reproducen su "
@@ -222,9 +222,14 @@ def seccion_algo_mal(cf, diag: dict, rep: dict) -> list:
         [r"¿Reproducimos su métrica?", r"\textbf{" + ("Sí, del mismo tamaño" if iguales else "Con reservas") + "}",
          r"Con su método, a 12 sesiones y en los 5 valores: RankIC " + cf.n(k["k_ric_precios"], 4, True) + r" en precios y "
          + cf.n(k["k_ric_rentab"], 4, True) + r" en rentabilidad paso a paso; la suya, 0,0254 (media de todos sus mercados y "
-         r"frecuencias). Prolongar en línea recta la tendencia de 20 sesiones: " + cf.n(n["n_ric_precios"], 4, True) + r". " + vs
+         r"frecuencias). Prolongar en línea recta la tendencia de 20 sesiones: " + cf.n(k["n_ric_precios"], 4, True)
+         + " y " + cf.n(k["n_ric_rentab"], 4, True) + r". " + vs
          + (r" Cada predicción rehecha coincide al último bit con la evaluada." if iguales else
             r" \textbf{Ojo}: alguna predicción rehecha no coincide con la evaluada.")],
+        [r"¿Lo usamos como lo usan ellos para operar?", r"\textbf{No}",
+         r"Su demo de trading (\texttt{finetune/qlib\_test.py}) lo \emph{reentrena} en el mercado antes de ordenar valores "
+         r"con una cartera top-K. Aquí se probó sin reentrenar. Lo había leído y no saqué la consecuencia: es la prueba que "
+         r"falta, y la principal de la segunda ronda."],
         [r"¿Podía la prueba ver un orden pequeño?", r"\textbf{Hasta cierto punto}",
          r"Con " + cf.entero(diag["semanas"]) + r" semanas veía una RankIC de " + cf.n(diag["minima_detectable"], 3)
          + r" o más; la medida queda entre " + cf.n(diag["ic90"][0], 3, True) + " y " + cf.n(diag["ic90"][1], 3, True)
@@ -295,13 +300,14 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
         [r"¿Ordena los valores del S\&P 500 entre sí?", r"\textbf{" + ("Sí" if sp_ok else "No") + "}",
          r"RankIC semanal media " + cf.n(sp["rankic_media"], 4, True) + r", $t$ = " + cf.n(sp["rankic_t"], 2, True) + "; "
          + _criterios_sp(sp) + "."],
-        [r"¿Hemos hecho algo mal?", r"\textbf{No que se haya encontrado}",
-         r"Mismo modelo y protocolo que sus autores. Pero su artículo no mide lo mismo que la prueba del S\&P 500: eso lo "
-         r"planteé mal yo (sección 7)."],
-        [r"¿Se puede ganar dinero con él?", r"\textbf{" + ("Quizá, ordenando valores" if sp_ok else "No, con nada de lo probado") + "}",
+        [r"¿Hemos hecho algo mal?", r"\textbf{Sí, una cosa}",
+         r"La predicción, como sus autores (misma métrica, mismo tamaño). Pero para ordenar valores ellos lo reentrenan "
+         r"antes, y aquí no se hizo; y presenté la prueba del S\&P 500 como la de su artículo (sección 7)."],
+        [r"¿Se puede ganar dinero con él?", r"\textbf{" + ("Quizá, ordenando valores" if sp_ok else "Sin reentrenar, no") + "}",
          (r"Los 50 primeros según Kronos rinden más que el índice a partes iguales; falta probarlo en los candidatos del bot y un "
           r"walk-forward antes de arriesgar nada." if sp_ok else
-          r"Ni prediciendo un valor, ni con reglas, ni eligiendo entre los 500 del índice.")],
+          r"Ni prediciendo un valor, ni con reglas, ni eligiendo entre los 500 del índice. Falta reentrenarlo, como sus "
+          r"autores: segunda ronda.")],
     ]
     w.append(B.tabla(r">{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{2.6cm}L", [r"\textbf{pregunta}", r"\textbf{respuesta}", r"\textbf{la prueba}"], filas,
                      "Lo que se ha preguntado y lo que ha contestado"))
@@ -420,11 +426,12 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
                  r"prueba sobre los candidatos reales del swing desde julio de 2024, con la lista histórica del índice (sin el "
                  r"sesgo de supervivencia), y si gana ahí, un walk-forward antes de tocar nada con dinero.")
     else:
-        w.append(r"Kronos-small, con la configuración de su artículo, \textbf{no tiene un uso aprovechable aquí}: no predice un "
-                 r"valor, su probabilidad no se cumple, su incertidumbre es demasiado estrecha, de sus salidas sólo salen reglas "
-                 r"de suerte y no ordena los valores del S\&P 500. Se cierra la línea: no se prueban más configuraciones (sería "
-                 r"buscar hasta que algo salga por azar) y TiresIAs se queda como está, con sus resultados publicados. Un resultado "
-                 r"negativo bien medido también sirve: cierra la pregunta con números y evita que vuelva como corazonada.")
+        w.append(r"Kronos-small \textbf{sin reentrenar} no tiene un uso aprovechable aquí: no predice un valor, su "
+                 r"probabilidad no se cumple, su incertidumbre es demasiado estrecha, de sus salidas sólo salen reglas de suerte "
+                 r"y no ordena los valores del S\&P 500. Queda la receta de sus autores para operar: \textbf{reentrenarlo en el "
+                 r"mercado antes de ordenar}. Es la segunda ronda (plan en \texttt{docs/PLAN\_KRONOS\_UTILIDAD\_2026-10-28.md}), "
+                 r"con una lista cerrada de hipótesis escrita antes de medir, una sola prueba por hipótesis y la incubadora en "
+                 r"sombra antes de nada con dinero: seguir probando hasta que algo salga sería fabricar un falso positivo.")
     w.append(r"\section*{Cómo se ha comprobado}")
     w.append(r"Ninguna predicción ve datos posteriores a su fecha (un test inventa el futuro y exige que no cambie). Los "
              r"criterios se escribieron antes de medir (\texttt{docs/PLAN.md}, fechado por git). La RankIC y las carteras del "
