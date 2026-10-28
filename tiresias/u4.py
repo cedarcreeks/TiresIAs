@@ -184,6 +184,22 @@ def _predecir(a) -> int:
     return 0
 
 
+def _medir(a) -> int:
+    d = pathlib.Path(a.dir).expanduser()
+    tok, mod = cargar(a.modelo, pathlib.Path(a.u4).expanduser() if a.u4 else None, a.dispositivo)
+    df = T.leer_velas(d, a.simbolo)
+    pos = [i for i, x in enumerate(df.index) if x >= pd.Timestamp(DESDE) and i >= L - 1]
+    n_valores = len([s for s in json.loads((d / "simbolos.json").read_text(encoding="utf-8"))["simbolos"] if s != T.CALENDARIO])
+    for lote in a.lotes:
+        puntuar(tok, mod, df, a.simbolo, pos[:lote], a.modelo, lote)              # calentar
+        t0 = time.time()
+        puntuar(tok, mod, df, a.simbolo, pos, a.modelo, lote)
+        s = (time.time() - t0) / len(pos)
+        print(f"lote {lote}: {s * 1000:.0f} ms por serie · {n_valores} valores × {len(pos)} sesiones ≈ "
+              f"{s * n_valores * len(pos) / 3600:.1f} h", flush=True)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="orden", required=True)
@@ -199,7 +215,16 @@ def main(argv=None) -> int:
     e.add_argument("--dir", required=True)
     e.add_argument("--pred", required=True)
     e.add_argument("--placebos", type=int, default=200)
+    m = sub.add_parser("medir")
+    m.add_argument("--dir", required=True)
+    m.add_argument("--u4", default="")
+    m.add_argument("--modelo", choices=["reentrenado", "original"], required=True)
+    m.add_argument("--simbolo", default="AAPL")
+    m.add_argument("--lotes", nargs="+", type=int, default=[120, 300])
+    m.add_argument("--dispositivo", default="cuda")
     a = ap.parse_args(argv)
+    if a.orden == "medir":
+        return _medir(a)
     if a.orden == "predecir":
         return _predecir(a)
     r = evaluar(pathlib.Path(a.dir).expanduser(), pathlib.Path(a.pred).expanduser(), a.placebos)
