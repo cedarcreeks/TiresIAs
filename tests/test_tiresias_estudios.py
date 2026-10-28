@@ -48,3 +48,26 @@ def test_la_eleccion_no_mira_la_prueba(tmp_path):
     a, b = S.mineria(tmp_path / "a", ["A", "B"], placebos=3), S.mineria(tmp_path / "b", ["A", "B"], placebos=3)
     assert a["elegidas"] == b["elegidas"] and a["desarrollo"]["reglas"] == b["desarrollo"]["reglas"]
     assert a["prueba"]["reglas"] != b["prueba"]["reglas"], "el montaje: la prueba sí cambió"
+
+
+def test_diagnostico_ve_una_prediccion_de_reversion(tmp_path):
+    """Si la «predicción» es la última semana cambiada de signo, la correlación con la última semana es −1."""
+    from tiresias import transversal as T
+    rng = np.random.default_rng(2)
+    cal = pd.bdate_range("2023-06-01", "2025-06-30")
+    sim = [f"V{k:03d}" for k in range(110)]
+    for s in ["SPY"] + sim:
+        c = 100 * np.exp(np.cumsum(rng.normal(0, 0.02, len(cal))))
+        pd.DataFrame({"open": c, "high": c, "low": c, "close": c, "volume": 1.0, "adjclose": c}, index=cal).to_csv(
+            tmp_path / f"velas_{s}.csv")
+        if s == "SPY":
+            continue
+        filas = []
+        for f in T.rejilla(cal):
+            i = cal.get_loc(f)
+            filas.append({"fecha": str(f.date()), "r_prevista": -(c[i] / c[i - 5] - 1), "r_real": c[i + 5] / c[i] - 1,
+                          "r_p10": -0.01, "r_p90": 0.01})
+        pd.DataFrame(filas).to_csv(tmp_path / f"pred_{s}_H5.csv", index=False)
+    r = S.diagnostico_sp500(tmp_path, sim)
+    assert r["kronos_vs_ultima_semana"] == pytest.approx(-1.0)
+    assert r["minima_detectable"] > 0 and r["ic90"][0] < r["ic90"][1]

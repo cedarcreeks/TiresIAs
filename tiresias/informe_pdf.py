@@ -492,7 +492,8 @@ Si no sabe nada, las dos salen como la frecuencia con que el valor sube sin más
     w.append(r"\item \textbf{Lo que se le reprocha con más claridad es la incertidumbre}: su banda es demasiado estrecha. Es lo "
              r"primero que intentará pulir TiresIAs: de julio de 2024 a junio de 2025 para desarrollar, y de julio de 2025 en "
              r"adelante, sin tocar, para una sola prueba final.")
-    w.append(r"\item \textbf{Queda la prueba del S\&P 500}, la de su artículo: no predecir un valor, sino ordenar 500 entre sí. "
+    w.append(r"\item \textbf{Queda la prueba del S\&P 500}: no predecir un valor, sino ordenar 500 entre sí (una hipótesis nuestra; "
+             r"su artículo mide otra cosa). "
              r"Es otra pregunta y puede salir distinta.")
     w.append(r"\item \textbf{Un sesgo que juega a su favor}, y aun así no pasa: las aperturas de Yahoo idénticas al cierre "
              r"anterior (" + ", ".join(nm[s] + " " + cf.pct(ap_igual[s], 1) for s in simbolos) + r" de las sesiones). Si son "

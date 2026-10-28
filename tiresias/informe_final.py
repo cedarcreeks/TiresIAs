@@ -41,7 +41,7 @@ class Comparador:
             self.fallos.append(f"{donde}: {a!r} frente a {b!r}")
 
 
-def verificar_sp500(d: pathlib.Path, simbolos: list, r: dict, cmp: Comparador):
+def verificar_sp500(d: pathlib.Path, simbolos: list, r: dict, cmp: Comparador, diag: dict):
     """RankIC semanal y carteras con diccionarios y bucles, leyendo los CSV de nuevo."""
     cal = [str(x)[:10] for x in pd.read_csv(d / "velas_SPY.csv", index_col=0).index]
     i0 = next(i for i, f in enumerate(cal) if f >= "2024-07-01")
@@ -68,6 +68,19 @@ def verificar_sp500(d: pathlib.Path, simbolos: list, r: dict, cmp: Comparador):
             lista.append(bruto - T.COSTE * rot)
             pesos.clear()
             pesos.update({s: w * (1 + ret[s]) / (1 + bruto) for s, w in nuevos.items()})
+    ult, rev = [], []
+    cierres = {s: dict(zip([str(k)[:10] for k in pd.read_csv(d / f"velas_{s}.csv", index_col=0).index],
+                           pd.read_csv(d / f"velas_{s}.csv", index_col=0, float_precision="round_trip")["close"]))
+               for s in simbolos}
+    for i in rej:
+        f, antes = cal[i], cal[i - 5]
+        filas = [(pred[(s, f)][0], pred[(s, f)][1], cierres[s][f] / cierres[s][antes] - 1) for s in simbolos
+                 if (s, f) in pred and f in cierres[s] and antes in cierres[s]]
+        if len(filas) >= 100:
+            ult.append(B._pearson(B._rangos_medios([x[0] for x in filas]), B._rangos_medios([x[2] for x in filas])))
+            rev.append(B._pearson(B._rangos_medios([-x[2] for x in filas]), B._rangos_medios([x[1] for x in filas])))
+    cmp("S&P Kronos frente a la última semana", sum(ult) / len(ult), diag["kronos_vs_ultima_semana"])
+    cmp("S&P reversión", sum(rev) / len(rev), diag["reversion_ic"])
     media = sum(ics) / len(ics)
     sd = math.sqrt(sum((x - media) ** 2 for x in ics) / (len(ics) - 1))
     cmp("S&P RankIC media", media, r["rankic_media"])
@@ -191,7 +204,49 @@ def extras(d5: pathlib.Path) -> dict:
             "cob_min": min(cob), "cob_max": max(cob)}
 
 
-def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Comparador, ex: dict) -> str:
+def seccion_algo_mal(cf, diag: dict, rep: dict) -> list:
+    """¿Hicimos algo mal? Cada comprobación con su cifra; la comparación con su métrica, con una rama por resultado."""
+    k, n = rep["media"], rep["media"]
+    iguales = all(v["predicciones_distintas_de_lo_guardado"] == 0 for v in rep["por_valor"].values())
+    vs = (r"La recta ingenua saca tanto o más que Kronos: lo que mide esa métrica lo da una regla sin modelo."
+          if k["k_ric_precios"] <= n["n_ric_precios"] else
+          r"Kronos saca algo más que la recta: su métrica capta algo, pero es parecido de caminos, no una ventaja operable "
+          r"(las pruebas 1 y 3 lo operan y pierden).")
+    filas = [
+        [r"¿Usamos el modelo como sus autores?", r"\textbf{Sí}",
+         r"Los pesos de su test de regresión, que pasa en el Mac y en el Windows; las trayectorias reproducen su "
+         r"\texttt{predict\_batch}; y su protocolo diario: 40 velas, temperatura 0,6, \emph{top-p} 0,9, 10 futuros."],
+        [r"¿Medía su artículo lo mismo que la prueba del S\&P 500?", r"\textbf{No}",
+         r"Su RankIC es la correlación, dentro de cada predicción, entre el camino previsto y el real. Presentar la prueba "
+         r"del S\&P 500 como la suya fue un error mío, ya corregido."],
+        [r"¿Reproducimos su métrica?", r"\textbf{" + ("Sí, del mismo tamaño" if iguales else "Con reservas") + "}",
+         r"Con su método, a 12 sesiones y en los 5 valores: RankIC " + cf.n(k["k_ric_precios"], 4, True) + r" en precios y "
+         + cf.n(k["k_ric_rentab"], 4, True) + r" en rentabilidad paso a paso; la suya, 0,0254 (media de todos sus mercados y "
+         r"frecuencias). Prolongar en línea recta la tendencia de 20 sesiones: " + cf.n(n["n_ric_precios"], 4, True) + r". " + vs
+         + (r" Cada predicción rehecha coincide al último bit con la evaluada." if iguales else
+            r" \textbf{Ojo}: alguna predicción rehecha no coincide con la evaluada.")],
+        [r"¿Podía la prueba ver un orden pequeño?", r"\textbf{Hasta cierto punto}",
+         r"Con " + cf.entero(diag["semanas"]) + r" semanas veía una RankIC de " + cf.n(diag["minima_detectable"], 3)
+         + r" o más; la medida queda entre " + cf.n(diag["ic90"][0], 3, True) + " y " + cf.n(diag["ic90"][1], 3, True)
+         + r" (90~\%). Un orden diminuto no se descarta; uno útil, sí."],
+        [r"¿Faltaban futuros (sólo 10)?", r"\textbf{No}",
+         r"El " + cf.pct(diag["fiabilidad_mediana"]) + r" de las diferencias entre valores no es azar del muestreo: con "
+         r"infinitos futuros, el techo seguiría siendo el mismo."],
+        [r"¿Qué predice entonces?", r"\textbf{Reversión}",
+         r"Su predicción va al revés de la última semana de cada valor (correlación de rangos "
+         + cf.n(diag["kronos_vs_ultima_semana"], 2, True) + r"): apuesta a que lo que cayó rebota. La regla clásica de "
+         r"reversión, sin modelo, tampoco funcionó en este periodo: RankIC " + cf.n(diag["reversion_ic"], 4, True)
+         + r", $t$ = " + cf.n(diag["reversion_t"], 2, True) + "."],
+    ]
+    return [r"\section{¿Hemos hecho algo mal?}",
+            r"Si su artículo dice que mejora la RankIC, ¿cómo es que no sirve? Se ha comprobado por partes.",
+            B.tabla(r">{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{2.4cm}L",
+                    [r"\textbf{comprobación}", r"\textbf{respuesta}", r"\textbf{la prueba}"], filas,
+                    "Lo que podría haber salido mal, comprobado")]
+
+
+def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Comparador, ex: dict,
+              excluidos: dict, diag: dict, rep: dict) -> str:
     pro = v5["procedencia"]
     w = []
     w.append(r"""\documentclass[11pt,a4paper]{article}
@@ -216,7 +271,7 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
              r"predicciones con \texttt{" + pro["commit"] + r"} en CPU. S\&P 500: \texttt{" + sp["procedencia"]["commit"]
              + r"} en una " + _esc(sp["procedencia"]["gpu"] or "CPU") + r". Este informe: \texttt{" + commits["informe"]
              + r"}. " + cf.entero(cmp.n) + r" cifras recalculadas con una segunda implementación (diferencia máxima "
-             + B._exp(cmp.peor) + r").\end{center}")
+             + B._exp(cmp.peor) + r"); las de los cinco valores, en el informe anterior.\end{center}")
 
     # respuestas
     sp_ok, c5 = sp["aporta"], v5["H5"]
@@ -240,12 +295,15 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
         [r"¿Ordena los valores del S\&P 500 entre sí?", r"\textbf{" + ("Sí" if sp_ok else "No") + "}",
          r"RankIC semanal media " + cf.n(sp["rankic_media"], 4, True) + r", $t$ = " + cf.n(sp["rankic_t"], 2, True) + "; "
          + _criterios_sp(sp) + "."],
+        [r"¿Hemos hecho algo mal?", r"\textbf{No que se haya encontrado}",
+         r"Mismo modelo y protocolo que sus autores. Pero su artículo no mide lo mismo que la prueba del S\&P 500: eso lo "
+         r"planteé mal yo (sección 7)."],
         [r"¿Se puede ganar dinero con él?", r"\textbf{" + ("Quizá, ordenando valores" if sp_ok else "No, con nada de lo probado") + "}",
          (r"Los 50 primeros según Kronos rinden más que el índice a partes iguales; falta probarlo en los candidatos del bot y un "
           r"walk-forward antes de arriesgar nada." if sp_ok else
           r"Ni prediciendo un valor, ni con reglas, ni eligiendo entre los 500 del índice.")],
     ]
-    w.append(B.tabla(r"p{4.6cm}p{2.6cm}L", [r"\textbf{pregunta}", r"\textbf{respuesta}", r"\textbf{la prueba}"], filas,
+    w.append(B.tabla(r">{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{2.6cm}L", [r"\textbf{pregunta}", r"\textbf{respuesta}", r"\textbf{la prueba}"], filas,
                      "Lo que se ha preguntado y lo que ha contestado"))
     w.append(r"Todas las pruebas usan sólo datos posteriores a su entrenamiento (desde julio de 2024), con los criterios "
              r"escritos antes de mirar y con costes. Las de la volatilidad y las reglas son exploratorias: se hicieron sobre "
@@ -260,8 +318,11 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
     w.append(r"Su artículo (arXiv 2508.02739) mide tres tareas, siempre contra otros modelos: prever precios (una RankIC un "
              r"93~\% mejor que el mejor modelo fundacional de series y un 87~\% mejor que el mejor sin preentrenar), prever la "
              r"volatilidad (un 9~\% menos de error) y generar series sintéticas (un 22~\% más de fidelidad). Son mejoras "
-             r"\emph{relativas} a otros modelos, no frente a comprar y mantener ni netas de costes; el resumen no da los valores "
-             r"absolutos. Su propio repositorio avisa de que la estrategia de ejemplo no es un sistema para operar.")
+             r"\emph{relativas} a otros modelos, no frente a comprar y mantener ni netas de costes. Y su RankIC no ordena "
+             r"valores: es la correlación, dentro de cada predicción, entre el camino previsto de las próximas velas y el real. "
+             r"En valor absoluto es pequeña: 0,0254 para Kronos-small, frente a 0,0138 del mejor rival (sus tablas 14 y 15, "
+             r"media de mercados y frecuencias). Su propio repositorio avisa de que la estrategia de ejemplo no es un sistema "
+             r"para operar.")
 
     # 1. cinco valores
     w.append(r"\section{Prueba 1: ¿predice cada valor?}")
@@ -314,19 +375,26 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
     w.append(r"\section{Prueba 4: ¿ordena los valores del S\&P 500 entre sí?}")
     w.append(r"La pregunta cambia: no si un valor sube, sino \emph{cuáles irán mejor que los demás}. Si la semana siguiente cae "
              r"todo, pero los 50 que eligió caen un 1~\% y la media un 3~\%, acertó. Así se quita de en medio el movimiento del "
-             r"mercado, que en las pruebas anteriores lo tapaba todo, y es lo que su artículo reivindica.")
+             r"mercado, que en las pruebas anteriores lo tapaba todo. Ojo: su artículo \emph{no} mide esto (ver la sección "
+             r"siguiente); es una hipótesis nuestra sobre un uso posible, elegir entre los candidatos del bot.")
     w.append(r"Cada 5 sesiones desde julio de 2024 (" + cf.entero(sp["fechas"]) + r" semanas), Kronos predijo la rentabilidad a 5 "
-             r"sesiones de cada uno de los " + cf.entero(sp["valores_con_prediccion"]) + r" miembros actuales del índice. Cada "
+             r"sesiones de cada uno de los " + cf.entero(sp["valores_con_prediccion"]) + r" miembros actuales del índice (de "
+             + cf.entero(sp["valores_con_prediccion"] + len(excluidos)) + r"; fuera, " + cf.entero(len(excluidos))
+             + r" con menos de 300 sesiones de historia: escisiones y salidas recientes). Cada "
              r"semana se mide si su orden se parece al real (la RankIC de esa semana) y se simula comprar sus 50 primeros a la "
              r"apertura siguiente y venderlos 5 sesiones después, con dividendos y un 0,10~\% sobre lo que se rota, frente a "
              r"comprar los " + cf.entero(sp["valores_con_prediccion"]) + r" a partes iguales.")
     w.append(r"\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{fig_ic.pdf}\caption{La RankIC entre valores de "
-             r"cada semana: por encima de 0, ordenó mejor que el azar.}\end{figure}")
+             r"cada semana: por encima de 0, esa semana ordenó mejor que el azar.}\end{figure}")
     filas = [["los 50 primeros según Kronos", cf.pct(sp["cagr_top"], 1, True), cf.n(sp["sharpe_top"], 2)],
              [r"los " + cf.entero(sp["valores_con_prediccion"]) + r" a partes iguales", cf.pct(sp["cagr_todos"], 1, True), cf.n(sp["sharpe_todos"], 2)],
              ["los 50 últimos según Kronos (exploratorio)", cf.pct(sp["cagr_ultimos"], 1, True), cf.n(sp["sharpe_ultimos"], 2)]]
     w.append(B.tabla(r"LRR", ["cartera", "rentabilidad anual", "Sharpe"], filas, r"S\&P 500, neto de costes",
                      r"Si ordenara, los primeros irían mejor que todos, y los últimos, peor."))
+    if sp["sharpe_ultimos"] > sp["sharpe_top"]:
+        w.append(r"Aquí los últimos fueron mejor que los primeros. Con una RankIC media de " + cf.n(sp["rankic_media"], 4, True)
+                 + r" ($t$ = " + cf.n(sp["rankic_t"], 2, True) + r") no se puede leer como que acierte al revés: su orden no "
+                 r"lleva información, y los extremos de una cartera de 50 se mueven mucho por azar.")
     w.append(r"\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{fig_carteras.pdf}\caption{Comprar cada semana "
              r"los 50 primeros, los 50 últimos o todos, según Kronos.}\end{figure}")
     w.append(r"\begin{figure}[htbp]\centering\includegraphics[width=\textwidth]{fig_placebo.pdf}\caption{El placebo: las "
@@ -341,6 +409,8 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
                      r"(Yahoo no guarda los retirados). Infla las dos carteras por igual, así que la comparación entre ellas se ve "
                      r"menos afectada."))
 
+    w += seccion_algo_mal(cf, diag, rep)
+
     # conclusión
     w.append(r"\section{Qué significa y qué sigue}")
     if sp_ok:
@@ -353,7 +423,7 @@ def documento(cf, v5: dict, vol: dict, m: dict, sp: dict, commits: dict, cmp: Co
         w.append(r"Kronos-small, con la configuración de su artículo, \textbf{no tiene un uso aprovechable aquí}: no predice un "
                  r"valor, su probabilidad no se cumple, su incertidumbre es demasiado estrecha, de sus salidas sólo salen reglas "
                  r"de suerte y no ordena los valores del S\&P 500. Se cierra la línea: no se prueban más configuraciones (sería "
-                 r"buscar hasta que algo salga por azar) y TiresIAs queda archivado con sus resultados publicados. Un resultado "
+                 r"buscar hasta que algo salga por azar) y TiresIAs se queda como está, con sus resultados publicados. Un resultado "
                  r"negativo bien medido también sirve: cierra la pregunta con números y evita que vuelva como corazonada.")
     w.append(r"\section*{Cómo se ha comprobado}")
     w.append(r"Ninguna predicción ve datos posteriores a su fecha (un test inventa el futuro y exige que no cambie). Los "
@@ -390,7 +460,9 @@ def main(argv=None) -> int:
     simbolos = [s for s in json.loads((dsp / "simbolos.json").read_text(encoding="utf-8"))["simbolos"] if s != T.CALENDARIO]
     vol, m, ex = S.volatilidad(d5), S.mineria(d5), extras(d5)
     cmp = Comparador()
-    verificar_sp500(dsp, simbolos, sp, cmp)
+    diag = S.diagnostico_sp500(dsp, simbolos)
+    rep = json.loads((d5 / "replica_metrica.json").read_text(encoding="utf-8"))
+    verificar_sp500(dsp, simbolos, sp, cmp, diag)
     verificar_vol(d5, vol, cmp)
     verificar_mineria(m, cmp)
     print(f"verificación: {cmp.n} comparaciones, máx dif {cmp.peor:.1e}, fallos {len(cmp.fallos)}")
@@ -409,7 +481,8 @@ def main(argv=None) -> int:
     fig_mineria(m, sal / "fig_mineria.pdf")
     cf = B.Cifras()
     tex = sal / f"{NOMBRE}.tex"
-    tex.write_text(documento(cf, v5, vol, m, sp, commits, cmp, ex), encoding="utf-8")
+    excluidos = json.loads((dsp / "simbolos.json").read_text(encoding="utf-8")).get("excluidos", {})
+    tex.write_text(documento(cf, v5, vol, m, sp, commits, cmp, ex, excluidos, diag, rep), encoding="utf-8")
     pdf = B.compilar(tex)
     faltan = B.comprobar_pdf(pdf, cf.emitidas)
     print(f"PDF: {pdf} · {len(cf.emitidas)} cifras escritas, {len(faltan)} sin encontrar")

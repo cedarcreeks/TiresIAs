@@ -52,6 +52,8 @@ transversal media es > 0 con *t* > 2 y la cartera de los 50 cumple los puntos 2 
 declarado**: los valores son los miembros actuales del índice; los que salieron entre 2024 y 2026 no están (Yahoo no
 guarda los retirados), y eso favorece a cualquier estrategia larga.
 
+**Corrección del 28-oct**: no es la prueba de su artículo. Su IC/RankIC es la correlación, dentro de cada predicción, entre el camino previsto de H velas y el real (apertura, máximo, mínimo y cierre), no un orden entre valores; y en valor absoluto es pequeña (Kronos-small, RankIC 0,0254 de media). Esta prueba es una hipótesis nuestra sobre un uso posible, elegir entre candidatos. Los criterios no cambian.
+
 ## El pulido (fase 4)
 
 Desarrollo: 2024-07 → 2025-06. Prueba final: 2025-07 → 2026-10, **una vez** por mejora, con estos mismos criterios.

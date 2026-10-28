@@ -126,3 +126,37 @@ def mineria(d: pathlib.Path, simbolos: list = SIMBOLOS, placebos: int = 200) -> 
          "curvas_prueba": {s: c for s, c in ct.items()}}
     r["aprueba"] = bool(r["prueba"]["reglas"] > bh_t and r["prueba"]["reglas"] > r["prueba"]["placebo_p95"])
     return r
+
+
+# ── ¿hicimos algo mal? (S&P 500) ─────────────────────────────────────────
+def diagnostico_sp500(dsp: pathlib.Path, simbolos: list) -> dict:
+    """Potencia de la prueba, ruido de promediar sólo N futuros y qué está prediciendo Kronos en realidad."""
+    import math
+
+    from tiresias import transversal as T
+    fechas, simbolos, P, Rc, _ = T.matrices(dsp, simbolos)
+    ic = T.rankic_por_fecha(P, Rc)
+    v = ic[~np.isnan(ic)]
+    se = float(v.std(ddof=1) / math.sqrt(len(v)))
+    P10, P90, PAS = (np.full_like(P, np.nan) for _ in range(3))
+    cal = T.leer_velas(dsp, T.CALENDARIO).index
+    for j, s in enumerate(simbolos):
+        p = _pred(dsp, s, 5).set_index("fecha")
+        c = T.leer_velas(dsp, s)["close"]
+        for i, f in enumerate(fechas):
+            k = str(f.date())
+            if k in p.index:
+                P10[i, j], P90[i, j] = p.at[k, "r_p10"], p.at[k, "r_p90"]
+            antes = cal[int(cal.get_loc(f)) - 5]                    # type: ignore[arg-type]
+            if f in c.index and antes in c.index:
+                PAS[i, j] = c[f] / c[antes] - 1.0
+    # el promedio de N futuros tiene varianza ≈ sd²/N, con sd ≈ (p90 − p10)/2,563 (normal)
+    ruido = ((P90 - P10) / 2.563) ** 2 / 10
+    fiab = np.array([1 - np.nanmean(ruido[i]) / np.nanvar(P[i]) for i in range(len(P))])
+    ultima = T.rankic_por_fecha(P, PAS)
+    rev = T.rankic_por_fecha(-PAS, Rc)
+    w = rev[~np.isnan(rev)]
+    return {"semanas": len(v), "error_tipico": se, "ic90": (float(v.mean() - 1.645 * se), float(v.mean() + 1.645 * se)),
+            "minima_detectable": 2 * se, "fiabilidad_mediana": float(np.median(fiab)),
+            "kronos_vs_ultima_semana": float(np.nanmean(ultima)),
+            "reversion_ic": float(w.mean()), "reversion_t": float(w.mean() / (w.std(ddof=1) / math.sqrt(len(w))))}
