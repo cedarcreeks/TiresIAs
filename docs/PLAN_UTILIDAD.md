@@ -38,6 +38,14 @@ Replica `finetune/config.py` y `finetune/qlib_test.py`, cambiando sólo el merca
   percentil 95 de 200 placebos (las puntuaciones de cada valor barajadas entre fechas).
 - **Comparación, sin entrar en Holm**: la misma receta con el modelo sin reentrenar.
 
+**Desviación no declarada antes, escrita el 29-oct y antes de ver ningún resultado de U4**: su `config.py` fija el lote
+**por GPU** y sus scripts se lanzan con `torchrun` en varias (su ejemplo: 2). Con una GPU, el lote efectivo fue 50 y no 100,
+con el doble de pasos por época al mismo ritmo de aprendizaje. El mejor modelo se elige igual, por la pérdida de validación;
+el del predictor salió en la época 4 de 30. **Control del reentreno** (`python -m tiresias.reentrenar controlar`): con los
+pesos guardados se reproduce la pérdida apuntada al entrenar (diferencia 2e-7, otra máquina) y el reentrenado baja la del
+original: tokenizador 0,01151 → 0,00788 (−31,5 %), predictor 3,3276 → 3,3039 (−0,7 %). Aprendió estos datos; si eso ordena
+mejor los valores es lo que mide U4.
+
 ## U1 · Ordenar los candidatos del swing
 
 - **Datos**: los candidatos del motor PIT de thalos-ibkr (`precomputar_candidatos`, el camino del WF), cada sesión del

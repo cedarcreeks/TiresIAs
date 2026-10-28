@@ -10,6 +10,7 @@ de validación. Su `QlibDataset` se usa tal cual, con la configuración inyectad
     python -m tiresias.reentrenar tokenizador --dir <dir> --dispositivo cuda
     python -m tiresias.reentrenar predictor --dir <dir> --dispositivo cuda
     python -m tiresias.reentrenar medir --dir <dir> --dispositivo cuda        (segundos por lote, para el presupuesto)
+    python -m tiresias.reentrenar controlar --dir <dir> --dispositivo mps    (pérdida de validación, original y reentrenado)
 """
 from __future__ import annotations
 
@@ -217,9 +218,46 @@ def predictor(cfg: Config, dispositivo: str, salida: pathlib.Path, max_lotes: in
     return {"mejor_val": mejor, "historial": hist}
 
 
+def controlar(cfg: Config, dispositivo: str, d: pathlib.Path) -> dict:
+    """La pérdida de validación del modelo original y del reentrenado, con el mismo cargador que los bucles.
+
+    Dos controles: con los pesos guardados tiene que salir la pérdida que el bucle apuntó al guardarlos (si no, los pesos
+    o la medida están mal), y el reentrenado tiene que bajar la del original (si no, el reentreno no aprendió nada de
+    estos datos). La del predictor sólo se compara con su propio tokenizador: el original con el tokenizador reentrenado
+    es la referencia de que hay que reentrenar los dos, en ese orden, como hacen sus autores. La del predictor tiene ruido:
+    sin teacher forcing (como en sus bucles), Kronos condiciona s2 a un s1 muestreado; con las 20.000 muestras de la
+    validación, de 2e-7 (medido el 29-oct, otra máquina y otro estado del generador)."""
+    from model import Kronos, KronosTokenizer
+    _, vl, _, va = _cargadores(cfg)
+    va.set_epoch_seed(0)
+    tok_o, _ = M.cargar("small", dispositivo)
+    repo, rev = M.MODELOS["small"]
+    pred_o = Kronos.from_pretrained(repo, revision=rev).eval().to(dispositivo)
+    tok_r = KronosTokenizer.from_pretrained(str(d / "tokenizador_mejor")).eval().to(dispositivo)
+    pred_r = Kronos.from_pretrained(str(d / "predictor_mejor")).eval().to(dispositivo)
+    tok_o.eval()
+    toks = {"original": tok_o, "reentrenado": tok_r}
+    pares = {"original": (pred_o, tok_o), "original con el tokenizador reentrenado": (pred_o, tok_r),
+             "reentrenado": (pred_r, tok_r)}
+    st, sp, n, lotes = dict.fromkeys(toks, 0.0), dict.fromkeys(pares, 0.0), 0, 0
+    with torch.no_grad():
+        for x, xs in vl:
+            x, xs = x.to(dispositivo), xs.to(dispositivo)
+            for k, tok in toks.items():
+                st[k] += F.mse_loss(tok(x)[0][1], x).item() * x.size(0)
+            for k, (mod, tok) in pares.items():
+                s0, s1 = tok.encode(x, half=True)
+                lg = mod(s0[:, :-1], s1[:, :-1], xs[:, :-1, :])
+                sp[k] += mod.head.compute_loss(lg[0], lg[1], s0[:, 1:], s1[:, 1:])[0].item()
+            n += x.size(0)
+            lotes += 1
+    return {"muestras": n, "lotes": lotes, "dispositivo": dispositivo,
+            "tokenizador": {k: v / n for k, v in st.items()}, "predictor": {k: v / lotes for k, v in sp.items()}}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("orden", choices=["preparar", "tokenizador", "predictor", "medir"])
+    ap.add_argument("orden", choices=["preparar", "tokenizador", "predictor", "medir", "controlar"])
     ap.add_argument("--velas")
     ap.add_argument("--dir", "--salida", dest="dir", required=True)
     ap.add_argument("--dispositivo", default="cuda")
@@ -233,6 +271,19 @@ def main(argv=None) -> int:
         return 0
     torch.manual_seed(100)
     cfg = Config(str(d), a.epocas, a.lote, a.acumulacion)
+    if a.orden == "controlar":
+        r = controlar(cfg, a.dispositivo, d)
+        apuntado = {k: json.loads((d / f"{k}.json").read_text())["mejor_val"] for k in ("tokenizador", "predictor")
+                    if (d / f"{k}.json").exists()}
+        r["apuntado_al_entrenar"] = apuntado
+        (d / "control_reentreno.json").write_text(json.dumps(r, indent=1, ensure_ascii=False))
+        print(json.dumps(r, indent=1, ensure_ascii=False))
+        malos = [k for k in apuntado if abs(r[k]["reentrenado"] - apuntado[k]) > 1e-4 * abs(apuntado[k])]
+        malos += [f"{k}: el reentrenado no baja del original" for k in ("tokenizador", "predictor")
+                  if not r[k]["reentrenado"] < r[k]["original"]]
+        if malos:
+            raise SystemExit(f"⛔ control del reentreno: {malos}")
+        return 0
     if a.orden == "medir":
         import shutil
         cfg.epochs = 1

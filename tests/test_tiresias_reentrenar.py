@@ -44,3 +44,24 @@ def test_los_bucles_corren_guardan_y_reanudan(tmp_path):
     cfg.epochs = 3
     with pytest.raises(SystemExit):                                     # con otro plan de épocas, no reanuda
         RE.predictor(cfg, "cpu", tmp_path / "p")
+
+
+def test_el_control_reproduce_la_pérdida_apuntada_al_guardar(tmp_path, monkeypatch):
+    """Con los pesos guardados, la pérdida de validación tiene que ser la que el bucle apuntó: si no, se mide otra cosa
+    o se cargan otros pesos. Y el original no es el reentrenado (si lo fuera, el reentreno no se habría cargado).
+    Kronos.forward, sin teacher forcing (como entrenan sus autores), condiciona s2 a un s1 MUESTREADO: la pérdida del
+    predictor tiene ruido, que con 8 muestras pasa de 1e-4 y con 20.000 queda en 2e-7 (medido el 29-oct). Aquí se quita el
+    muestreo para que la comparación sea exacta y pruebe la fontanería."""
+    import torch
+    monkeypatch.setattr(torch, "multinomial", lambda p, n: p.argmax(dim=-1, keepdim=True))
+    _velas(tmp_path)
+    RE.preparar(tmp_path, tmp_path / "p")
+    cfg = RE.Config(str(tmp_path / "p"), epocas=1, lote=4)
+    cfg.n_train_iter, cfg.n_val_iter = 8, 8
+    t = RE.tokenizador(cfg, "cpu", tmp_path / "p")
+    p = RE.predictor(cfg, "cpu", tmp_path / "p")
+    r = RE.controlar(cfg, "cpu", tmp_path / "p")
+    assert r["tokenizador"]["reentrenado"] == pytest.approx(t["mejor_val"], rel=1e-6)
+    assert r["predictor"]["reentrenado"] == pytest.approx(p["mejor_val"], rel=1e-6)
+    assert r["tokenizador"]["original"] != pytest.approx(r["tokenizador"]["reentrenado"], rel=1e-6)
+    assert r["predictor"]["original"] != pytest.approx(r["predictor"]["reentrenado"], rel=1e-6)
