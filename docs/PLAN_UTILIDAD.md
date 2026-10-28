@@ -41,12 +41,14 @@ Replica `finetune/config.py` y `finetune/qlib_test.py`, cambiando sólo el merca
 ## U1 · Ordenar los candidatos del swing
 
 - **Datos**: los candidatos del motor PIT de thalos-ibkr (`precomputar_candidatos`, el camino del WF), cada sesión del
-  periodo; sin sesgo de supervivencia. Para cada candidato, la puntuación de U4 (o, si U4 no llega a reentrenarse, la del
+  periodo (ver la corrección de abajo: sí tiene sesgo de supervivencia). Para cada candidato, la puntuación de U4 (o, si U4 no llega a reentrenarse, la del
   modelo sin reentrenar, y se dice).
 - **p principal**: RankIC entre candidatos de la misma sesión (sesiones con ≥ 5) con su rentabilidad de apertura a apertura
   a 5 sesiones, en sesiones cada 5 (sin solape); *t* de la media.
 - **Criterio económico**: la mitad de arriba según Kronos rinde más que todos los candidatos, con P ≥ 90 %. Si pasa, antes de
   nada, el walk-forward PIT del motor con ese filtro (regla del proyecto).
+
+**Corrección del 28-oct, antes de medir U1**: el histórico del motor PIT sale de Yahoo y **no tiene los valores retirados** (0 de 8 comprobados: MRO, CTLT, DFS, ANSS, JNPR, HES, WBA, K). U1 tiene el mismo sesgo de supervivencia que U4: la ventaja que le atribuí no existe. Los criterios no cambian.
 
 ## U2 · ¿Sabe algo más que la reversión?
 
