@@ -35,6 +35,20 @@ C_COMPRA, C_VENTA = 0.0010, 0.0015
 
 
 # ── modelos y puntuación ─────────────────────────────────────────────────
+TOPE_VRAM = 0.85
+
+
+def vigilar_vram(dispositivo: str) -> float:
+    """Fracción de la memoria de vídeo que llegó a reservar PyTorch. En Windows, pasarse NO da error de memoria: el
+    controlador desborda a la RAM del sistema y todo va 6–8 veces más lento (28-oct: lote 120 a 687 ms por serie, lote
+    60 a 85). Por eso se para en vez de seguir."""
+    import torch
+    if not dispositivo.startswith("cuda"):
+        return 0.0
+    usado = torch.cuda.max_memory_reserved() / torch.cuda.get_device_properties(0).total_memory
+    if usado > TOPE_VRAM:
+        raise SystemExit(f"⛔ la memoria de vídeo llegó al {usado:.0%} (tope {TOPE_VRAM:.0%}): baja el lote")
+    return usado
 def cargar(nombre: str, u4: pathlib.Path | None, dispositivo: str):
     if nombre == "original":
         return M.cargar("small", dispositivo)
@@ -178,6 +192,7 @@ def _predecir(a) -> int:
         pos = [i for i, x in enumerate(df.index) if x >= pd.Timestamp(DESDE) and i >= L - 1]
         pos = pos[::a.cada]
         p = puntuar(tok, mod, df, s, pos, a.modelo, a.lote)
+        vigilar_vram(a.dispositivo)                       # tras el primer valor ya se sabe: si se pasa, se para
         p.to_csv(f.with_suffix(".tmp"), index=False)
         f.with_suffix(".tmp").replace(f)
         print(f"{k}/{len(simbolos)} {s}: {len(p)} fechas en {time.time() - t0:.1f} s", flush=True)
@@ -192,11 +207,12 @@ def _medir(a) -> int:
     n_valores = len([s for s in json.loads((d / "simbolos.json").read_text(encoding="utf-8"))["simbolos"] if s != T.CALENDARIO])
     for lote in a.lotes:
         puntuar(tok, mod, df, a.simbolo, pos[:lote], a.modelo, lote)              # calentar
+        vram = vigilar_vram(a.dispositivo)
         t0 = time.time()
         puntuar(tok, mod, df, a.simbolo, pos, a.modelo, lote)
         s = (time.time() - t0) / len(pos)
-        print(f"lote {lote}: {s * 1000:.0f} ms por serie · {n_valores} valores × {len(pos)} sesiones ≈ "
-              f"{s * n_valores * len(pos) / 3600:.1f} h", flush=True)
+        print(f"lote {lote}: {s * 1000:.0f} ms por serie, memoria de vídeo {vram:.0%} · {n_valores} valores × "
+              f"{len(pos)} sesiones ≈ {s * n_valores * len(pos) / 3600:.1f} h", flush=True)
     return 0
 
 
@@ -209,7 +225,7 @@ def main(argv=None) -> int:
     p.add_argument("--modelo", choices=["reentrenado", "original"], required=True)
     p.add_argument("--salida", required=True)
     p.add_argument("--dispositivo", default="cuda")
-    p.add_argument("--lote", type=int, default=120)
+    p.add_argument("--lote", type=int, default=60)          # 120 desborda los 6 GB de la RTX (medido)
     p.add_argument("--cada", type=int, default=1)
     e = sub.add_parser("evaluar")
     e.add_argument("--dir", required=True)
