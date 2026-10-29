@@ -5,6 +5,8 @@ probabilidad no se cumple, su incertidumbre es estrecha, sus reglas son suerte y
 demo de trading (`finetune/`) **lo reentrena antes de ordenar valores**, y eso no se probó. Esta ronda tiene una lista
 cerrada de cinco hipótesis; no se añaden otras, y si ninguna pasa, se cierra.
 
+**Resultado (29-oct)**: ninguna pasa; la línea se cierra. Ver [RESULTADOS_RONDA2.md](RESULTADOS_RONDA2.md).
+
 ## Reglas comunes
 
 - **Periodo**: del 2024-07-01 (fin del preentrenamiento) al 2026-10-23. Las hipótesis que **no eligen ni ajustan nada** con

@@ -248,6 +248,27 @@ def _medir(a) -> int:
     return 0
 
 
+def comparar(d: pathlib.Path, reentrenado: pathlib.Path, original: pathlib.Path, placebos: int = 200) -> dict:
+    """Exploratorio, fuera de Holm: el original se predijo cada 10 sesiones (coste de la RTX) y su cartera opera 10 veces
+    menos. Aquí el reentrenado también, sólo en esas fechas, y cada cartera con su placebo (sus puntuaciones barajadas
+    entre fechas): si el placebo gana, lo que rinde es la inclinación fija por valor, no la señal de cada día."""
+    simbolos = [s for s in json.loads((d / "simbolos.json").read_text(encoding="utf-8"))["simbolos"] if s != T.CALENDARIO]
+    cal, Sr, A, C = matrices(d, reentrenado, simbolos)
+    So = matrices(d, original, simbolos)[1]
+    años = (cal[-1] - cal[0]).days / 365.25
+    sh = lambda v: float((lambda r: r.mean() / r.std(ddof=1) * np.sqrt(252))(pd.Series(v).pct_change().dropna()))  # noqa: E731
+    out = {}
+    for nombre, S in (("reentrenado_cada_sesion", Sr), ("reentrenado_cada_10", np.where(np.isnan(So), np.nan, Sr)),
+                      ("original_cada_10", So)):
+        c = topk_dropout(S, A, C)
+        rng = np.random.default_rng(20261028)
+        plac = [sh(topk_dropout(T.barajar_por_valor(S, rng), A, C)["valor"]) for _ in range(placebos)]
+        out[nombre] = {"sharpe": sh(c["valor"]), "cagr": float(c["valor"][-1] ** (1 / años) - 1),
+                       "rotacion_anual": c["rotacion_anual"], "placebo_p50": float(np.median(plac)),
+                       "placebo_p95": float(np.percentile(plac, 95))}
+    return out
+
+
 def _camino(a) -> int:
     """Su métrica con el reentrenado y con el original, en los mismos valores y fechas (una muestra fija de valores y
     las fechas de 10 en 10, como el RankIC de U4). La misma semilla para los dos: el ruido del muestreo se empareja."""
@@ -304,7 +325,17 @@ def main(argv=None) -> int:
     c.add_argument("--valores", type=int, default=100)
     c.add_argument("--lote", type=int, default=60)
     c.add_argument("--dispositivo", default="mps")
+    k = sub.add_parser("comparar")
+    k.add_argument("--dir", required=True)
+    k.add_argument("--reentrenado", required=True)
+    k.add_argument("--original", required=True)
+    k.add_argument("--salida", required=True)
     a = ap.parse_args(argv)
+    if a.orden == "comparar":
+        r = comparar(*(pathlib.Path(x).expanduser() for x in (a.dir, a.reentrenado, a.original)))
+        pathlib.Path(a.salida).expanduser().write_text(json.dumps(r, indent=1), encoding="utf-8")
+        print(json.dumps(r, indent=1))
+        return 0
     if a.orden == "camino":
         return _camino(a)
     if a.orden == "medir":
