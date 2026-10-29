@@ -6,6 +6,8 @@ U1, `2d01b85`, y la desviación del lote de U4, `ac29a3f`, escritas antes de ver
 
 **Veredicto: ninguna de las cinco pasa. Como dice el plan, la línea se cierra.**
 
+**Estado (29-oct): aparcado.** No se prueban más configuraciones; si se retoma, con una declaración nueva y a futuro (el periodo posterior al preentrenamiento ya está usado).
+
 | | qué mide | *p* principal | sobrevive a Holm | criterio económico | pasa |
 |---|---|---|---|---|---|
 | U1 | ordena los candidatos del swing (RankIC por sesión, 26 sesiones) | 0,105 | no | no: la mitad de arriba gana con P 0,62 (pide ≥ 0,90) | no |
