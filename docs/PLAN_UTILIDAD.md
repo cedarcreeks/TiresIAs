@@ -58,6 +58,15 @@ mejor los valores es lo que mide U4.
 
 **Corrección del 28-oct, antes de medir U1**: el histórico del motor PIT sale de Yahoo y **no tiene los valores retirados** (0 de 8 comprobados: MRO, CTLT, DFS, ANSS, JNPR, HES, WBA, K). U1 tiene el mismo sesgo de supervivencia que U4: la ventaja que le atribuí no existe. Los criterios no cambian.
 
+**Concreción del 29-oct, antes de puntuar ninguna señal de U1** (el texto de arriba admite dos lecturas y elijo una
+ahora): sólo 55 de las 373 sesiones con señal tienen ≥ 5 candidatos, así que una rejilla fija de 5 en 5 sesiones dejaría
+~11 fechas. **Principal**: las sesiones con ≥ 5 candidatos puntuados y con rentabilidad, en orden, tomando cada una si
+está a ≥ 5 sesiones (calendario del SPY) de la última tomada: sin solape, como pide el plan, y sin mirar el resultado.
+**Sensibilidad, fuera de Holm**: la rejilla fija (cada 5 sesiones desde la primera del periodo). La puntuación es la de
+U4 (reentrenado, la misma función); la rentabilidad, de la apertura de `fecha_entrada` a la apertura 5 sesiones después;
+«la mitad de arriba», los ⌊n/2⌋ mejores de cada sesión; *P* por bootstrap estacionario de las sesiones tomadas (bloques
+de 4 de media, como U4).
+
 ## U2 · ¿Sabe algo más que la reversión?
 
 - **Datos**: las predicciones del S&P 500 de la primera ronda (`7396451`).
