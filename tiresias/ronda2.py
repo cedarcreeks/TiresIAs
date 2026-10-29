@@ -115,9 +115,25 @@ def u5(cinco: pathlib.Path, btc_usd: pathlib.Path, desde: str = "2024-07-01", re
             "operaciones_e006": cambios(tramo), "operaciones_veto": cambios(con_veto(tramo, ks))}
 
 
+# ── veredicto de la ronda: Holm sobre el p principal de cada una ─────────
+def veredicto(r: dict) -> list:
+    """Una fila por hipótesis con su p principal, si sobrevive a Holm al 5 % y su criterio económico (None si el plan no
+    le pone ninguno: U2 es un diagnóstico). Pasa si sobrevive a Holm Y cumple el económico."""
+    principal = {"U1": r["U1"]["principal"]["p"], "U2": r["U2"]["p"], "U3": r["U3"]["p"],
+                 "U4": r["U4"]["rankic_10"]["p"], "U5": r["U5"]["p"]}
+    economico = {"U1": r["U1"]["principal"]["p_exceso_positivo"] >= 0.9, "U2": None, "U3": r["U3"]["p_mejor"] >= 0.9,
+                 "U4": r["U4"]["pasa_economico"], "U5": r["U5"]["p_mejor"] >= 0.9}
+    h = ES.holm(principal)
+    return [{"hipotesis": k, "p": principal[k], "holm": h[k], "economico": economico[k],
+             "pasa": bool(h[k] and economico[k] is not False)} for k in sorted(principal)]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="orden", required=True)
+    av = sub.add_parser("veredicto")
+    for k in ("u1", "u2", "u3", "u4", "u5"):
+        av.add_argument(f"--{k}", required=True)
     a2 = sub.add_parser("u2")
     a2.add_argument("--sp500", required=True)
     a2.add_argument("--salida", required=True)
@@ -126,6 +142,16 @@ def main(argv=None) -> int:
     a5.add_argument("--pred", required=True, help="predicciones de BTC-USD a 5 con su protocolo de cripto")
     a5.add_argument("--salida", required=True)
     a = ap.parse_args(argv)
+    if a.orden == "veredicto":
+        r = {k: json.loads(pathlib.Path(getattr(a, k.lower())).expanduser().read_text(encoding="utf-8"))
+             for k in ("U1", "U2", "U3", "U4", "U5")}
+        filas = veredicto(r)
+        for f in filas:
+            eco = "—" if f["economico"] is None else ("sí" if f["economico"] else "no")
+            print(f"{f['hipotesis']}: p {f['p']:.3f} · Holm {'sí' if f['holm'] else 'no'} · económico {eco} · "
+                  f"{'PASA' if f['pasa'] else 'no pasa'}")
+        print(f"pasan {len([f for f in filas if f['pasa']])} de {len(filas)}")
+        return 0
     if a.orden == "u5":
         r = u5(pathlib.Path(a.cinco).expanduser(), pathlib.Path(a.pred).expanduser())
         pathlib.Path(a.salida).expanduser().write_text(json.dumps(r, indent=1), encoding="utf-8")
