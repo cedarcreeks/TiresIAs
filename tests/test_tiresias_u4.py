@@ -53,3 +53,62 @@ def test_un_cierre_que_falta_no_hunde_la_cartera():
     c2[5, 5] = np.nan                                     # el mejor, en cartera, sin cierre el día 5
     hueco = U.topk_dropout(S, a, c2, k=3, n_drop=1)["valor"]
     assert hueco[5] > 0.9 * base[5]
+
+
+# ── la segunda implementación (verificar_u4) ─────────────────────────────
+def _carpeta(tmp_path, T=90, J=110, semilla=3, cada=1):
+    """Velas y puntuaciones sintéticas con el formato de los ficheros reales: un SPY de calendario y J valores, algunos
+    con huecos (sin apertura) y uno que empieza a cotizar a mitad del periodo."""
+    import json
+
+    import pandas as pd
+    rng = np.random.default_rng(semilla)
+    fechas = pd.bdate_range("2024-06-03", periods=T)
+    simbolos = [f"V{j:03d}" for j in range(J)]
+    (tmp_path / "simbolos.json").write_text(json.dumps({"simbolos": ["SPY"] + simbolos}), encoding="utf-8")
+    pred = tmp_path / "pred"
+    pred.mkdir()
+    for s in ["SPY"] + simbolos:
+        c = 100 * np.cumprod(1 + rng.normal(0, 0.015, T))
+        v = pd.DataFrame({"open": c * (1 + rng.normal(0, 0.003, T)), "high": c * 1.01, "low": c * 0.99, "close": c,
+                          "volume": 1e6, "adjclose": c * 0.97}, index=fechas)
+        if s == "V005":
+            v = v.iloc[40:]                                   # empieza a cotizar a mitad del periodo
+        if s == "V007":
+            v.loc[v.index[50:53], "open"] = np.nan            # tres días sin apertura
+        v.to_csv(tmp_path / f"velas_{s}.csv")
+        if s != "SPY":
+            p = v.loc[v.index >= U.DESDE].iloc[::cada]
+            pd.DataFrame({"fecha": p.index.strftime("%Y-%m-%d"), "puntuacion": rng.normal(0, 1, len(p)),
+                          "r_prevista": 0.0}).to_csv(pred / f"pred_{s}.csv", index=False)
+    return tmp_path, pred
+
+
+def test_la_segunda_implementación_coincide_con_u4(tmp_path):
+    from tiresias import verificar_u4 as V
+    for cada in (1, 10):                                      # el reentrenado (cada sesión) y el original (cada 10)
+        (tmp_path / f"c{cada}").mkdir()
+        d, pred = _carpeta(tmp_path / f"c{cada}", cada=cada)
+        filas = V.comparar(U.evaluar(d, pred, placebos=2), V.verificar(d, pred))
+        assert [f[0] for f in filas if not f[3] <= 1e-9] == [], filas
+
+
+def test_la_segunda_implementación_ve_una_señal_desfasada(tmp_path, monkeypatch):
+    """Control negativo: si la cartera de u4 operase con la señal del mismo día (mira el futuro), no coincidirían."""
+    from tiresias import verificar_u4 as V
+    d, pred = _carpeta(tmp_path)
+    original = U.topk_dropout
+    monkeypatch.setattr(U, "topk_dropout", lambda S, A, C, **kw: original(np.vstack([S[1:], S[-1:]]), A, C, **kw))
+    filas = V.comparar(U.evaluar(d, pred, placebos=2), V.verificar(d, pred))
+    assert {"Sharpe cartera", "CAGR cartera"} <= {f[0] for f in filas if f[3] > 1e-9}
+
+
+def test_la_métrica_del_artículo_es_por_predicción_y_canal():
+    real = np.cumsum(np.random.default_rng(0).normal(0, 1, (10, 4)), axis=0) + 100
+    assert np.allclose(U.ic_camino(real * 2 + 5, real), (1.0, 1.0), atol=1e-12)   # un camino proporcional acierta
+    ic, ric = U.ic_camino(-real, real)
+    assert abs(ic + 1) < 1e-12 and abs(ric + 1) < 1e-12
+    plano = real.copy()
+    plano[:, 0] = 100.0                                                   # un canal previsto sin movimiento no cuenta
+    ic, _ = U.ic_camino(plano, real)
+    assert abs(ic - 1.0) < 1e-12

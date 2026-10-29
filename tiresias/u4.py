@@ -79,6 +79,38 @@ def puntuar(tok, mod, df: pd.DataFrame, simbolo: str, posiciones: list, etiqueta
     return pd.DataFrame(filas)
 
 
+def ic_camino(prev: np.ndarray, real: np.ndarray) -> tuple:
+    """La métrica de su artículo (apéndice D): en UNA predicción, la correlación a lo largo del horizonte entre el camino
+    previsto y el real, en cada canal de precio (apertura, máximo, mínimo, cierre), y la media de los cuatro. `prev` y
+    `real`: [H, 4]. Un canal constante no tiene correlación y no cuenta."""
+    ic, ric = [], []
+    for c in range(4):
+        p, r = prev[:, c], real[:, c]
+        if np.std(p) == 0 or np.std(r) == 0:
+            continue
+        ic.append(float(np.corrcoef(p, r)[0, 1]))
+        ric.append(X.spearman(p, r))
+    return (float(np.mean(ic)), float(np.mean(ric))) if ic else (np.nan, np.nan)
+
+
+def caminos(tok, mod, df: pd.DataFrame, simbolo: str, posiciones: list, etiqueta: str, lote: int = 60) -> list:
+    """(fecha, IC, RankIC) de su métrica en cada posición, con la configuración de U4 (90 velas, 10 de horizonte, 5
+    futuros, T 0,6, top-p 0,9) y el camino real de las 10 sesiones siguientes."""
+    precios = ["open", "high", "low", "close"]
+    out = []
+    for k in range(0, len(posiciones), lote):
+        trozo = posiciones[k:k + lote]
+        dfs = [df.iloc[i - L + 1:i + 1][precios + ["volume"]].reset_index(drop=True) for i in trozo]
+        th = [pd.Series(df.index[i - L + 1:i + 1]) for i in trozo]
+        tf = [pd.Series(df.index[i + 1:i + 1 + H]) for i in trozo]
+        z = M.trayectorias(tok, mod, dfs, th, tf, H, N, T=0.6, top_p=0.9,
+                           seed=M.semilla(simbolo, H, N, str(df.index[trozo[0]].date()), etiqueta))
+        for j, i in enumerate(trozo):
+            real = df.iloc[i + 1:i + 1 + H][precios].to_numpy(dtype=float)
+            out.append((str(df.index[i].date()), *ic_camino(z[j, :, :, :4].mean(axis=0), real)))
+    return out
+
+
 # ── TopkDropout ──────────────────────────────────────────────────────────
 def topk_dropout(S: np.ndarray, A: np.ndarray, Ccl: np.ndarray, k: int = K, n_drop: int = N_DROP,
                  permanencia: int = PERMANENCIA, riesgo: float = RIESGO, c_compra: float = C_COMPRA,
@@ -216,6 +248,34 @@ def _medir(a) -> int:
     return 0
 
 
+def _camino(a) -> int:
+    """Su métrica con el reentrenado y con el original, en los mismos valores y fechas (una muestra fija de valores y
+    las fechas de 10 en 10, como el RankIC de U4). La misma semilla para los dos: el ruido del muestreo se empareja."""
+    d, u4 = pathlib.Path(a.dir).expanduser(), pathlib.Path(a.u4).expanduser()
+    simbolos = [s for s in json.loads((d / "simbolos.json").read_text(encoding="utf-8"))["simbolos"] if s != T.CALENDARIO]
+    muestra = sorted(np.random.default_rng(20261029).choice(simbolos, size=min(a.valores, len(simbolos)), replace=False))
+    modelos = {m: cargar(m, u4, a.dispositivo) for m in ("reentrenado", "original")}
+    filas, t0 = [], time.time()
+    for k, s in enumerate(muestra, 1):
+        df = T.leer_velas(d, s)
+        pos = [i for i, x in enumerate(df.index) if x >= pd.Timestamp(DESDE) and i >= L - 1 and i + H < len(df)][::H]
+        for m, (tok, mod) in modelos.items():
+            filas += [{"valor": s, "modelo": m, "fecha": f, "ic": ic, "rankic": ric}
+                      for f, ic, ric in caminos(tok, mod, df, s, pos, "camino", a.lote)]
+        print(f"{k}/{len(muestra)} {s}: {len(pos)} fechas, {time.time() - t0:.0f} s", flush=True)
+    p = pd.DataFrame(filas)
+    p.to_csv(u4 / "camino.csv", index=False)
+    por_fecha = p.pivot_table(index="fecha", columns="modelo", values=["ic", "rankic"], aggfunc="mean")
+    res: dict = {"valores": len(muestra), "predicciones_por_modelo": int((p["modelo"] == "original").sum())}
+    for met in ("ic", "rankic"):
+        dif = (por_fecha[(met, "reentrenado")] - por_fecha[(met, "original")]).dropna()
+        res[met] = {**{m: float(p.loc[p["modelo"] == m, met].mean()) for m in ("reentrenado", "original")},
+                    "diferencia": R2.resumen_t(dif.to_numpy())}          # t con las fechas como unidad (no los valores)
+    (u4 / "camino.json").write_text(json.dumps(res, indent=1), encoding="utf-8")
+    print(json.dumps(res, indent=1))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="orden", required=True)
@@ -238,7 +298,15 @@ def main(argv=None) -> int:
     m.add_argument("--simbolo", default="AAPL")
     m.add_argument("--lotes", nargs="+", type=int, default=[120, 300])
     m.add_argument("--dispositivo", default="cuda")
+    c = sub.add_parser("camino")
+    c.add_argument("--dir", required=True)
+    c.add_argument("--u4", required=True)
+    c.add_argument("--valores", type=int, default=100)
+    c.add_argument("--lote", type=int, default=60)
+    c.add_argument("--dispositivo", default="mps")
     a = ap.parse_args(argv)
+    if a.orden == "camino":
+        return _camino(a)
     if a.orden == "medir":
         return _medir(a)
     if a.orden == "predecir":
