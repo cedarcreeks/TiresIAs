@@ -143,3 +143,79 @@ def extraer(ptrs: list, carpeta: pathlib.Path, leer=texto_pdf) -> tuple:
 def compras(filas: list) -> list:
     """Las que se copian (PLAN_FASE3, 3C): compras de acciones con símbolo; sin clase (formato antiguo) o con «ST»."""
     return [f for f in filas if f["tipo"] == "P" and f["ticker"] and f["clase"] in (None, "ST")]
+
+
+# ── 5. la cartera que copia a los elegidos ───────────────────────────────────
+DIAS_TENENCIA = 182
+MESES_HISTORIAL, MINIMO_COMPRAS = 24, 5
+
+
+def centro_tramo(minimo) -> float:
+    """El centro del tramo legal de importe (el de «más de 50 M» vale su mínimo)."""
+    if minimo is None:
+        return float("nan")
+    maximo = TRAMOS.get(minimo, minimo)
+    return (minimo + maximo) / 2
+
+
+def posicion(compra: dict, r_diaria: dict, dias: int = DIAS_TENENCIA):
+    """La posición de una compra declarada: se entra al cierre del primer día de mercado **posterior** a la
+    presentación (no se sabe a qué hora se publica) y se sale `dias` después. Devuelve {"miembro", "presentado",
+    "entrada", "peso", "r": {fecha: rentabilidad diaria}, "total"} o None si no hay precio para entrar."""
+    import datetime as dt
+    fechas = sorted(f for f in r_diaria if f > compra["presentado"])
+    if not fechas:
+        return None
+    entrada = fechas[0]                       # su rentabilidad es la del día de entrada: no se cobra
+    fin = entrada + dt.timedelta(days=dias)
+    r = {f: x for f, x in r_diaria.items() if entrada < f <= fin}
+    total = float(pd_prod(r.values())) - 1 if r else 0.0
+    return {"miembro": compra["congresista"], "presentado": compra["presentado"], "entrada": entrada,
+            "salida": fin, "peso": centro_tramo(compra.get("importe_min")), "r": r, "total": total}
+
+
+def pd_prod(xs) -> float:
+    p = 1.0
+    for x in xs:
+        p *= 1 + x
+    return p
+
+
+def fin_trimestre(f):
+    import datetime as dt
+    mes = 3 * ((f.month - 1) // 3) + 3
+    sig = dt.date(f.year + (mes == 12), 1 if mes == 12 else mes + 1, 1)
+    return sig - dt.timedelta(days=1)
+
+
+def historial(posiciones: list, q, meses: int = MESES_HISTORIAL, minimo: int = MINIMO_COMPRAS) -> dict:
+    """{miembro: rentabilidad media a 6 meses} con lo que se sabe al cierre del trimestre `q`: sus compras presentadas
+    en los `meses` anteriores **cuya tenencia ya acabó** antes de `q` (si no, se miraría al futuro); al menos `minimo`."""
+    import datetime as dt
+    desde = q - dt.timedelta(days=round(meses * 30.44))
+    por = {}
+    for p in posiciones:
+        if desde < p["presentado"] and p["salida"] <= q:
+            por.setdefault(p["miembro"], []).append(p["total"])
+    return {m: sum(v) / len(v) for m, v in por.items() if len(v) >= minimo}
+
+
+def cartera_diaria(posiciones: list, elegidos: dict, ponderar: bool = True):
+    """Rentabilidad diaria de copiar: cada compra de un miembro elegido al cierre del trimestre anterior a su
+    presentación entra con su peso (centro del tramo, o igual) y vive su tenencia aunque el miembro deje de estarlo.
+    `elegidos`: {fin de trimestre: conjunto de miembros}. Un día sin ninguna posición, sin rentabilidad."""
+    import pandas as pd
+    import datetime as dt
+    num, den = {}, {}
+    for p in posiciones:
+        q = fin_trimestre(p["presentado"])
+        # el día 1 del PRIMER mes del trimestre, menos un día (con el del último mes caía en el mismo trimestre y se
+        # copiaba con la elección del trimestre en curso: lo cazó su test)
+        q_anterior = dt.date(q.year, q.month - 2, 1) - dt.timedelta(days=1)
+        if p["miembro"] not in elegidos.get(q_anterior, set()):
+            continue
+        w = p["peso"] if ponderar and p["peso"] == p["peso"] else 1.0
+        for f, x in p["r"].items():
+            num[f] = num.get(f, 0.0) + w * x
+            den[f] = den.get(f, 0.0) + w
+    return pd.Series({f: num[f] / den[f] for f in sorted(num)}, dtype=float)

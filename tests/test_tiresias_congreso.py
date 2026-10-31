@@ -1,5 +1,7 @@
 """Tests de tiresias.congreso: el índice del Clerk y la descarga reanudable de las declaraciones."""
 import io
+
+import pytest
 import urllib.error
 import zipfile
 
@@ -96,3 +98,46 @@ def test_extraer_usa_la_fecha_de_presentacion_y_cuenta_lo_que_no_se_lee(tmp_path
     assert {f["presentado"] for f in filas} == {dt.date(2016, 11, 15)} and filas[0]["congresista"] == "Brooks, Mo (AL05)"
     c = C.compras(filas)
     assert [x["ticker"] for x in c] == ["T", "FOXA"]                         # ni ventas ni la opción [OP]
+
+
+def _r(desde, n, x):
+    import datetime as dt
+    out, f = {}, desde
+    while len(out) < n:
+        if f.weekday() < 5:
+            out[f] = x
+        f += dt.timedelta(days=1)
+    return out
+
+
+def test_la_posicion_entra_el_dia_despues_de_presentarse_y_vive_182_dias():
+    import datetime as dt
+    r = _r(dt.date(2020, 1, 2), 300, 0.001)
+    p = C.posicion({"congresista": "A", "presentado": dt.date(2020, 1, 6), "importe_min": 15001}, r)
+    assert p["entrada"] == dt.date(2020, 1, 7) and min(p["r"]) == dt.date(2020, 1, 8)     # sin la del día de entrada
+    assert max(p["r"]) <= dt.date(2020, 1, 7) + dt.timedelta(days=182) and p["peso"] == (15001 + 50000) / 2
+    assert p["total"] == pytest.approx(1.001 ** len(p["r"]) - 1)
+    assert C.posicion({"congresista": "A", "presentado": dt.date(2030, 1, 1), "importe_min": None}, r) is None
+
+
+def test_el_historial_solo_usa_tenencias_acabadas():
+    import datetime as dt
+    q = dt.date(2021, 12, 31)
+    def pos(m, presentado, total):
+        return {"miembro": m, "presentado": presentado, "salida": presentado + dt.timedelta(days=183), "total": total}
+    ps = [pos("A", dt.date(2021, 3, 1), 0.1) for _ in range(5)] + [pos("A", dt.date(2021, 9, 1), 9.9)]   # acaba en 2022
+    ps += [pos("B", dt.date(2021, 2, 1), 0.2) for _ in range(4)]                                         # sólo 4
+    ps += [pos("C", dt.date(2019, 6, 1), 0.3) for _ in range(5)]                                         # fuera de 24 meses
+    assert C.historial(ps, q) == {"A": pytest.approx(0.1)}
+
+
+def test_la_cartera_copia_solo_a_los_elegidos_del_trimestre_anterior():
+    import datetime as dt
+    d1, d2 = dt.date(2021, 4, 5), dt.date(2021, 4, 6)
+    ps = [{"miembro": "A", "presentado": dt.date(2021, 4, 1), "peso": 3.0, "r": {d1: 0.01, d2: 0.02}},
+          {"miembro": "B", "presentado": dt.date(2021, 4, 1), "peso": 1.0, "r": {d1: 0.05}},
+          {"miembro": "A", "presentado": dt.date(2021, 2, 1), "peso": 1.0, "r": {d1: -0.01}}]   # elegido en 2020-12? no
+    s = C.cartera_diaria(ps, {dt.date(2021, 3, 31): {"A", "B"}})
+    assert s[d1] == pytest.approx((3 * 0.01 + 1 * 0.05) / 4) and s[d2] == pytest.approx(0.02)
+    s2 = C.cartera_diaria(ps, {dt.date(2021, 3, 31): {"A", "B"}}, ponderar=False)
+    assert s2[d1] == pytest.approx((0.01 + 0.05) / 2)
