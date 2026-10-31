@@ -166,7 +166,7 @@ def mes_de_entrada(presentado: pd.Timestamp) -> pd.Timestamp:
     return presentado + pd.offsets.MonthEnd(0) + pd.offsets.MonthEnd(1)
 
 
-def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
+def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame, cobertura_min: float = COBERTURA_MIN) -> tuple:
     """Rentabilidad mensual de cada gestor (DataFrame meses × cik) y la cobertura de cada 13F.
 
     `posiciones`: las de `leer_13f`. `rent`: rentabilidades mensuales (fin de mes × **CUSIP**, de `precios`): por CUSIP
@@ -201,7 +201,7 @@ def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
             v = h["valor"].to_numpy(dtype=float)
             cob = float(v[con_precio].sum() / v.sum()) if v.sum() > 0 else 0.0
             n = int(con_precio.sum())
-            entra = cob >= COBERTURA_MIN and n >= POSICIONES_MIN
+            entra = cob >= cobertura_min and n >= POSICIONES_MIN
             cobertura.append({"cik": cik, "presentado": p, "cobertura": cob, "n": n, "entra": entra,
                               "valor": float(v.sum())})
             if not entra:

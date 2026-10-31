@@ -262,12 +262,15 @@ class Alpaca:
                 self._dormir(min(60.0, 2.0 ** intento))
         raise RuntimeError("inalcanzable")
 
-    def barras(self, simbolos: list, desde: str, hasta: str, ajuste: str, asof: str | None = None) -> dict:
+    def barras(self, simbolos: list, desde: str, hasta: str, ajuste: str, asof: str | None = None,
+               solos=None) -> dict:
         """{símbolo: {fecha: (cierre, volumen)}} de barras diarias SIP.
 
         En una petición de varios símbolos, Alpaca los traduce a su empresa de hoy y **quita los repetidos sin
         avisar** (FB y META juntos devuelven sólo META; SQ y XYZ, sólo XYZ; medido el 31-oct): cada símbolo pedido
-        que no vuelve se pide solo, y el que siga sin nada queda en `sin_datos`."""
+        que no vuelve se pide solo, y el que siga sin nada queda en `sin_datos`. `solos`: los únicos que se pueden
+        repetir solos (None, todos): un símbolo sin barras tal como cotizó (`asof=-`) no existe en Alpaca y repetirlo
+        no trae nada (17 de 17 en el ensayo)."""
         q = {"symbols": ",".join(simbolos), "timeframe": "1Day", "start": desde, "end": hasta,
              "adjustment": ajuste, "feed": "sip", "limit": 10000}
         if asof:
@@ -290,7 +293,10 @@ class Alpaca:
         out = {s: x for s, x in out.items() if s in simbolos}
         for s in simbolos:
             if s not in out:
-                out.update(self.barras([s], desde, hasta, ajuste, asof))
+                if solos is None or s in solos:
+                    out.update(self.barras([s], desde, hasta, ajuste, asof))
+                else:
+                    self.sin_datos.append((s, desde, hasta, ajuste, asof))
         return out
 
     def acciones(self, desde: str, hasta: str, cusips: list = (), simbolos: list = ()) -> dict:

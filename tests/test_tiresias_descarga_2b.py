@@ -12,8 +12,8 @@ class _Alpaca:
     def __init__(self, datos, sin=()):
         self.datos, self.sin, self.pedidas, self.sin_datos = datos, set(sin), [], []
 
-    def barras(self, simbolos, desde, hasta, ajuste, asof=None):
-        self.pedidas.append(("barras", tuple(simbolos), ajuste, asof))
+    def barras(self, simbolos, desde, hasta, ajuste, asof=None, solos=None):
+        self.pedidas.append(("barras", tuple(simbolos), ajuste, asof, None if solos is None else tuple(sorted(solos))))
         for s in simbolos:
             if s in self.sin:
                 self.sin_datos.append((s, desde, hasta, ajuste, asof))
@@ -33,7 +33,9 @@ def test_ejecuta_por_partes_y_no_repite_lo_hecho(tmp_path):
     a = _Alpaca({"A": {D(2016, 1, 4): (10.0, 5)}, "B": {D(2016, 1, 4): (20.0, 0)}}, sin=["Z"])
     r = X.ejecutar(PEDIDO, tmp_path, a)
     assert r["hechas"] == 3 and r["saltadas"] == 0 and sorted(r["sin_datos"]) == [("all", "Z"), ("tal_cual", "Z")]
-    assert ("barras", ("A", "B", "Z"), "raw", "-") in a.pedidas                 # tal_cual: raw con asof=-
+    # tal_cual primero, sin repetir solos; los otros modos sólo repiten los que tienen barras tal como cotizaron
+    assert a.pedidas[0] == ("barras", ("A", "B", "Z"), "raw", "-", ())
+    assert a.pedidas[1] == ("barras", ("A", "B", "Z"), "all", None, ("A", "B"))
     assert sorted(p.name for p in tmp_path.glob("*.gz")) == [
         "acciones_c1.json.gz", "barras_l1_all.jsonl.gz", "barras_l1_tal_cual.jsonl.gz"]
     assert not list(tmp_path.glob("*.tmp"))
@@ -50,3 +52,11 @@ def test_lee_de_vuelta_lo_que_escribe(tmp_path):
                _Alpaca({}))
     acc = X.leer_acciones(tmp_path)
     assert [d["id"] for d in acc["cash_dividends"]] == ["1", "2"]               # sin duplicados entre partes
+
+
+def test_al_reanudar_lee_de_su_parte_que_simbolos_tienen_barras(tmp_path):
+    pedido = {"barras": [dict(PEDIDO["barras"][0], modos=["tal_cual"])]}
+    X.ejecutar(pedido, tmp_path, _Alpaca({"A": {D(2016, 1, 4): (10.0, 5)}}))
+    a = _Alpaca({})
+    X.ejecutar(PEDIDO, tmp_path, a)                                          # ya está tal_cual: sólo pide all
+    assert a.pedidas[0] == ("barras", ("A", "B", "Z"), "all", None, ("A",))

@@ -38,14 +38,22 @@ def ejecutar(pedido: dict, destino: pathlib.Path, alpaca) -> dict:
     hechas = saltadas = 0
     sin_datos = []
     for b in pedido.get("barras", []):
-        for modo in b["modos"]:
+        # primero lo que cotizó con cada símbolo (asof=-): lo que ahí no tiene barras no existe en Alpaca, y en los
+        # otros modos sólo se repiten solos los que sí las tienen (los que un lote se calla al quitar repetidos)
+        con_barras = None
+        for modo in sorted(b["modos"], key=lambda m: m != "tal_cual"):
             parte = destino / f"barras_{b['id']}_{modo}.jsonl.gz"
             if parte.exists():
+                if modo == "tal_cual":
+                    con_barras = set(_simbolos_de(parte))
                 saltadas += 1
                 continue
             ajuste, asof = MODOS[modo]
             antes = len(alpaca.sin_datos)
-            out = alpaca.barras(b["simbolos"], b["desde"], b["hasta"], ajuste, asof)
+            out = alpaca.barras(b["simbolos"], b["desde"], b["hasta"], ajuste, asof,
+                                solos=set() if modo == "tal_cual" else con_barras)
+            if modo == "tal_cual":
+                con_barras = set(out)
             faltan = [x[0] for x in alpaca.sin_datos[antes:]]
             lineas = (json.dumps({"s": s, "f": f.isoformat(), "c": c, "v": v})
                       for s, serie in sorted(out.items()) for f, (c, v) in sorted(serie.items()))
@@ -66,6 +74,11 @@ def ejecutar(pedido: dict, destino: pathlib.Path, alpaca) -> dict:
             m.write(json.dumps({"parte": parte.name, "registros": sum(len(v) for v in out.values())}) + "\n")
         hechas += 1
     return {"hechas": hechas, "saltadas": saltadas, "sin_datos": sin_datos}
+
+
+def _simbolos_de(parte: pathlib.Path) -> list:
+    with gzip.open(parte, "rt", encoding="utf-8") as f:
+        return sorted({json.loads(linea)["s"] for linea in f if linea.strip()})
 
 
 def leer_barras(destino: pathlib.Path, modo: str) -> dict:

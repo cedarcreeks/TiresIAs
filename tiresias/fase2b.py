@@ -173,3 +173,71 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
             for d in P.acciones_de(c, acciones, finales).get(k, []):
                 ajenos.add((d["acquirer_symbol"], dt.date.fromisoformat(d["effective_date"])))
     return {"tramos": tramos, "estado": estado, "rangos_pendientes": pendientes, "ajenos": ajenos}
+
+
+# ── 6. el juicio ─────────────────────────────────────────────────────────────
+def juntar_pasadas(dirs: list) -> tuple:
+    """(series {modo: {símbolo: {fecha: (cierre, volumen)}}}, acciones sin duplicados, rangos pedidos {símbolo:
+    (desde, hasta)}) de una o varias pasadas de `descarga_2b` (cada una con su `pedido.json`)."""
+    import json
+    from tiresias import descarga_2b as X
+    series = {m: {} for m in ("all", "raw", "tal_cual")}
+    acciones, vistos, rangos = {}, set(), {}
+    for d in dirs:
+        for m in series:
+            for s, x in X.leer_barras(d, m).items():
+                series[m].setdefault(s, {}).update(x)
+        for k, v in X.leer_acciones(d).items():
+            for r in v:
+                if r.get("id") not in vistos:
+                    vistos.add(r.get("id"))
+                    acciones.setdefault(k, []).append(r)
+        for b in json.loads((d / "pedido.json").read_text())["barras"]:
+            for s in b["simbolos"]:
+                a, h = dt.date.fromisoformat(b["desde"]), dt.date.fromisoformat(b["hasta"])
+                x, y = rangos.get(s, (a, h))
+                rangos[s] = (min(x, a), max(y, h))
+    return series, acciones, rangos
+
+
+def rentabilidades_por_cusip(pos, ftd, pasadas, fin_datos, pesimista=False) -> dict:
+    """De las posiciones, el FTD y las pasadas de precios a la tabla mensual por CUSIP, o a lo que falta pedir.
+    Devuelve {"falta": pedido} si quedan rangos o cierres por bajar; si no, {"rent", "caminos", "estado"}."""
+    from tiresias import precios as P
+    simb, prec = registros(ftd)
+    v = ventanas(pos, fin_datos)
+    series, acciones, rangos = juntar_pasadas(pasadas)
+    rev = revisar(v, simb, prec, series["tal_cual"], acciones, rangos)
+    faltan_ajenos = {(s, f) for s, f in rev["ajenos"] if f not in P._con_volumen(series["tal_cual"].get(s, {}))
+                     and not (s in rangos and rangos[s][0] <= f <= rangos[s][1])}
+    if rev["rangos_pendientes"] or faltan_ajenos:
+        pend = dict(rev["rangos_pendientes"])
+        for s, f in faltan_ajenos:
+            x, y = pend.get(s, (f - MARGEN, f))
+            pend[s] = (min(x, f - MARGEN), max(y, f))
+        return {"falta": pedido(pend, [], modos=("all", "raw", "tal_cual")), "estado": rev["estado"]}
+    validos = {c: t for c, t in rev["tramos"].items() if rev["estado"][c] in ("ok", "sin contraste")}
+    acc = {c: P.acciones_de(c, acciones, t) for c, t in validos.items()}
+    tc = series["tal_cual"]
+    ajenos = {(s, f): tc[s][f][0] for s, f in rev["ajenos"] if f in P._con_volumen(tc.get(s, {}))}
+    r, caminos = P.rentabilidades(validos, series, acc, ajenos, {c: v[c] for c in validos}, pesimista)
+    rent = pd.DataFrame({c: {pd.Timestamp(m): x for m, x in serie.items()} for c, serie in r.items()}).sort_index()
+    return {"rent": rent, "caminos": caminos, "estado": rev["estado"]}
+
+
+def juicio(pos, rent, F, sp_exceso, cobertura_min=G.COBERTURA_MIN, reps=G.REPS_PLACEBO, desde="2019-01-01") -> dict:
+    """Las carteras, la regla de parada y, si no para, la selección, la receta, «todos», el placebo y el veredicto."""
+    r_g, cob = G.carteras(pos, rent, cobertura_min)
+    stop = G.parada(cob)
+    out = {"parada": stop, "cobertura": cob, "r_gestores": r_g}
+    if stop["para"]:
+        return out
+    # los factores acaban antes que los precios (AQR, 2026-08): sólo los meses que tienen los dos
+    decs = G.decisiones(r_g.loc[r_g.index.isin(F.index)], F, desde)
+    rf = F["RF"]
+    rec = G.neto(G.receta(decs, F, G.elegir_decil))
+    todos = G.neto(G.receta(decs, F, G.elegir_todos))
+    plac = [G.metricas(G.neto(G.receta(decs, F, G.elegir_azar(s))), rf)["sharpe"] for s in range(reps)]
+    out.update({"decisiones": decs, "receta": rec, "todos": todos, "placebo": plac,
+                "veredicto": G.veredicto(rec, sp_exceso, todos, plac, rf)})
+    return out

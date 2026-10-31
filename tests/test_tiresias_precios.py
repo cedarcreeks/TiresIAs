@@ -196,6 +196,11 @@ def test_alpaca_pide_solo_lo_que_un_lote_se_calla():
     assert set(out) == {"FB", "META"} and a.peticiones == 3
     assert "symbols=FB&" in red.pedidas[1].full_url and "symbols=NADA&" in red.pedidas[2].full_url
     assert a.sin_datos == [("NADA", "2020-01-02", "2020-01-10", "raw", None)]
+    # con solos=() no se repite ninguno, y quedan apuntados como sin datos
+    red = _Red([{"bars": {"META": [b]}}])
+    a = P.Alpaca("k", "s", abrir=red, dormir=lambda _: None)
+    assert set(a.barras(["FB", "META"], "2020-01-02", "2020-01-10", "raw", solos=set())) == {"META"}
+    assert len(red.pedidas) == 1 and [x[0] for x in a.sin_datos] == ["FB"]
     # una clave que no se pidió (XYZ por SQ) no entra, y SQ se pide solo
     red = _Red([{"bars": {"XYZ": [b], "AAPL": [b]}}, {"bars": {"SQ": [b]}}])
     out = P.Alpaca("k", "s", abrir=red, dormir=lambda _: None).barras(["SQ", "AAPL"], "2020-01-02", "2020-01-10", "raw")
