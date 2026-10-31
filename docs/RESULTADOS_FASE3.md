@@ -70,9 +70,9 @@ Juicio de 2018-04 a 2026-08 (98 meses):
 | 3 · Por encima de NANC en el periodo común | **no** |
 
 Ponderada por importe, la copia ganó más que el S&P 500 (+2,9 pp al año), pero con mucho más riesgo: Sharpe 0,63
-frente a 0,76. Esa ganancia sale de unas pocas compras muy grandes y no se distingue de elegir congresistas al azar
-(cae dentro del placebo). A partes iguales, la ventaja desaparece. Y en 2023–2026 queda muy por debajo de NANC, que
-copia a todos los demócratas.
+frente a 0,76, y no se distingue de elegir congresistas al azar (cae dentro del placebo). A partes iguales baja a
+9,9 % y Sharpe 0,38: lo que gana lo aportan las compras de importe grande. Y en 2023–2026 queda muy por debajo de NANC,
+que copia a todos los demócratas.
 
 **Lo que se lleva quien lo lea**: ni copiar a todos (NANC: alfa 0,0) ni elegir a los «mejores» congresistas por su
 historial bate al índice.
