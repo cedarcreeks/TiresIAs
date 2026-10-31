@@ -56,6 +56,44 @@ def ideas(pos: pd.DataFrame, rent: pd.DataFrame, modo: str = "market", semilla=N
     return out.reset_index(drop=True)
 
 
+class Placebo:
+    """Un valor al azar de cada 13F activo, rápido: los grupos (gestor, 13F) se numeran una vez y sólo los activos (los
+    mismos que en el real: el filtro usa el *tilt* de la mejor idea). Cada placebo agrupaba por texto decenas de
+    millones de filas, y el 75 % que el filtro tiraba después (lo dijo el muestreo del proceso)."""
+
+    def __init__(self, cand: pd.DataFrame, activos_reales: pd.DataFrame):
+        claves = activos_reales[["cik", "presentado"]].drop_duplicates()
+        self._c = cand.merge(claves, on=["cik", "presentado"]).reset_index(drop=True)
+        self._codigos = self._c.groupby(["cik", "presentado"], sort=False).ngroup().to_numpy()
+
+    def ideas(self, semilla: int) -> pd.DataFrame:
+        r = np.random.default_rng(semilla).random(len(self._c))
+        orden = np.lexsort((-r, self._codigos))                          # por grupo, y dentro, el azar mayor primero
+        primero = orden[np.r_[True, self._codigos[orden][1:] != self._codigos[orden][:-1]]]
+        return self._c.iloc[primero][["cik", "presentado", "cusip", "periodo"]].reset_index(drop=True)
+
+
+_ESTADO = {}
+
+
+def _un_placebo(semilla: int) -> float:
+    pl, rent, rf = _ESTADO["placebo"], _ESTADO["rent"], _ESTADO["rf"]
+    b, c = cartera(pl.ideas(semilla), rent)
+    i = b.index.intersection(rf.index)
+    return G.metricas((b - c).loc[i] - rf.loc[i], rf)["sharpe"]
+
+
+def placebos(placebo: "Placebo", rent: pd.DataFrame, rf: pd.Series, reps: int, procesos: int = 1) -> list:
+    """Los Sharpe netos de `reps` placebos (semillas 0…reps−1), en `procesos` procesos con `fork`: heredan los datos
+    sin copiarlos (57 M de candidatas) y cada placebo es independiente. 3,5 s cada uno en un núcleo, medido."""
+    _ESTADO.update(placebo=placebo, rent=rent, rf=rf)
+    if procesos <= 1:
+        return [_un_placebo(s) for s in range(reps)]
+    import multiprocessing as mp
+    with mp.get_context("fork").Pool(procesos) as pool:
+        return pool.map(_un_placebo, range(reps))
+
+
 def activos(ideas_df: pd.DataFrame) -> pd.DataFrame:
     """El 25 % de 13F con mayor *tilt* en su mejor idea, por periodo (los autores, para dejar fuera a los casi
     indexados)."""
@@ -149,11 +187,8 @@ def ejecutar(raiz, pasadas: list, reps: int = 200) -> dict:
         bruta, coste = cartera(real, rent)
         idx = bruta.index.intersection(rf.index)
         bruta_ex, neta_ex = bruta.loc[idx] - rf.loc[idx], (bruta - coste).loc[idx] - rf.loc[idx]
-        plac = []
-        for s in range(reps):
-            b, c = cartera(activos(ideas(pos, rent, modo, semilla=s, cand=cand)), rent)
-            i2 = b.index.intersection(rf.index)
-            plac.append(G.metricas((b - c).loc[i2] - rf.loc[i2], rf)["sharpe"])
+        import os
+        plac = placebos(Placebo(cand, real), rent, rf, reps, procesos=max(1, (os.cpu_count() or 2) - 1))
         v = veredicto(neta_ex, bruta_ex, (sp - rf.reindex(sp.index)).dropna(), F, plac)
         out[modo] = {"ideas": int(len(real)), "gestores": int(real["cik"].nunique()),
                      "meses": [str(idx.min().date()), str(idx.max().date()), int(len(idx))],

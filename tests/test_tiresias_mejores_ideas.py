@@ -88,3 +88,31 @@ def test_una_mejor_idea_sin_precio_al_entrar_cede_a_la_siguiente():
     rent = _rent()
     rent.loc["2024-03-31", "C20"] = np.nan                                   # sin precio en su mes de entrada
     assert M.ideas(a, rent).set_index("cik").loc["1", "cusip"] == "C19"
+
+
+def test_el_placebo_rapido_elige_uno_al_azar_de_cada_13f_activo():
+    pos = pd.concat([_pos("1", "2024-02-14", [1.0] * 20 + [3.0]), _pos("2", "2024-02-14", [5.0] + [1.0] * 20),
+                     _pos("3", "2024-02-14", [1.0] * 21)])
+    cand = M.candidatas(pos, _rent())
+    reales = M.ideas(pos, _rent(), cand=cand)
+    act = reales[reales["cik"].isin(["1", "2"])]                             # sólo dos activos
+    pl = M.Placebo(cand, act)
+    vistos = {"1": set(), "2": set()}
+    for s in range(40):
+        x = pl.ideas(s)
+        assert sorted(x["cik"]) == ["1", "2"]                                # uno por 13F activo, y sólo de los activos
+        for cik, c in zip(x["cik"], x["cusip"]):
+            assert c in set(pos[pos["cik"] == cik]["cusip"])
+            vistos[cik].add(c)
+    assert len(vistos["1"]) > 8 and len(vistos["2"]) > 8                     # de verdad al azar
+    assert pl.ideas(7).equals(pl.ideas(7))                                   # reproducible con su semilla
+
+
+def test_los_placebos_en_paralelo_dan_lo_mismo_que_en_uno():
+    pos = pd.concat([_pos(str(k), "2024-02-14", list(np.random.default_rng(k).random(21) + 1)) for k in range(6)])
+    rent = _rent()
+    cand = M.candidatas(pos, rent)
+    real = M.ideas(pos, rent, cand=cand)
+    rf = pd.Series(0.001, index=rent.index)
+    pl = M.Placebo(cand, real)
+    assert M.placebos(pl, rent, rf, reps=6, procesos=1) == M.placebos(pl, rent, rf, reps=6, procesos=3)
