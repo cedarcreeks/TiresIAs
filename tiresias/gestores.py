@@ -4,7 +4,8 @@ Piezas, cada una con sus tests (tests/test_tiresias_gestores.py):
   1. `leer_13f`: las posiciones de los 13F-HR originales de un conjunto de datos de la SEC (sólo acciones, sin opciones).
   2. `leer_ftd` y `Traductor`: CUSIP → símbolo **con fecha**, de los ficheros de *fails-to-deliver* de la SEC.
   3. `normalizar_nombre` y `mapa_por_nombre`: el respaldo por nombre del emisor, sin coincidencias ambiguas.
-  4. `carteras`: la rentabilidad mensual que imita a cada gestor, con la cobertura mínima y el calendario declarados.
+  4. `carteras`: la rentabilidad mensual que imita a cada gestor, con la cobertura mínima y el calendario declarados
+     (las rentabilidades por CUSIP, de `tiresias.precios`).
   5. `receta`, `placebo` y `veredicto`: la selección por la t del alfa en 36 meses, la construcción de 2A′ para cada
      elegido, la comparación con el S&P 500, con el placebo y con «todos los gestores».
 """
@@ -124,12 +125,12 @@ def mes_de_entrada(presentado: pd.Timestamp) -> pd.Timestamp:
     return presentado + pd.offsets.MonthEnd(0) + pd.offsets.MonthEnd(1)
 
 
-def carteras(posiciones: pd.DataFrame, simbolo_de, rent: pd.DataFrame) -> tuple:
+def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
     """Rentabilidad mensual de cada gestor (DataFrame meses × cik) y la cobertura de cada 13F.
 
-    `posiciones`: las de `leer_13f`. `simbolo_de(cusip, fecha)`: el símbolo en la fecha de presentación, o None.
-    `rent`: rentabilidades mensuales (fin de mes × símbolo). Un 13F cuenta si tiene símbolo y precio en su primer mes
-    el ≥ 90 % de su valor y al menos 10 posiciones; sus pesos, por valor entre las que tienen precio. Dura hasta el mes
+    `posiciones`: las de `leer_13f`. `rent`: rentabilidades mensuales (fin de mes × **CUSIP**, de `precios`): por CUSIP
+    y no por símbolo, porque un símbolo se reutiliza (META fue un ETF hasta 2022). Un 13F cuenta si tiene precio en
+    su primer mes el ≥ 90 % de su valor y al menos 10 posiciones; sus pesos, por valor entre las que tienen precio. Dura hasta el mes
     de entrada del siguiente 13F del gestor (exclusive), como mucho `MESES_MAX` meses. Un valor sin precio un mes (se
     retiró de bolsa) se reparte entre los demás ese mes."""
     meses = rent.index
@@ -148,8 +149,7 @@ def carteras(posiciones: pd.DataFrame, simbolo_de, rent: pd.DataFrame) -> tuple:
             if i0 >= len(meses) or meses[i0] != ini:          # su primer mes no está en los precios
                 cobertura.append({"cik": cik, "presentado": p, "cobertura": 0.0, "n": 0, "entra": False})
                 continue
-            simb = [simbolo_de(c, pd.Timestamp(p)) for c in h["cusip"]]
-            idx = [cols.get(s) if s is not None else None for s in simb]
+            idx = [cols.get(c) for c in h["cusip"]]
             con_precio = np.array([j is not None and not np.isnan(R[i0, j]) for j in idx], dtype=bool)
             v = h["valor"].to_numpy(dtype=float)
             cob = float(v[con_precio].sum() / v.sum()) if v.sum() > 0 else 0.0

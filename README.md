@@ -22,7 +22,7 @@ Detailed plans and results are written in Spanish (`docs/`); this page summarise
 | **1** | Does Kronos, a foundation model for candlestick data, forecast anything useful after its training cut-off and net of costs? | **No.** 0 of 5 pre-registered tests pass; smallest *p* = 0.105 against a Holm threshold of 0.01. Retrained with the authors' own pipeline (U4), its portfolio Sharpe is 0.84, below the placebo 95th percentile of 1.25. [Results](docs/RESULTADOS_RONDA2.md) |
 | **2A** | Can Table 4 of *Buffett's Alpha* (Frazzini, Kabiller & Pedersen, 2018) be reproduced with public data? | **Yes, 3 of 3 criteria.** BAB loading 0.29 (published 0.29), QMJ 0.47 (0.43); the annualised alpha falls from 10.0 % (*t* = 2.68) with four factors to 4.0 % (*t* = 1.02) with six. HML is at the edge of tolerance (0.31 vs 0.46). [Results](docs/RESULTADOS_FASE2A.md) |
 | **2A′** | Does the systematic Buffett-style strategy survive publication? | **No, 2 of 3 criteria.** With parameters frozen on 1980–2011, its Sharpe ratio exceeds the market's by +0.65 in 2012–2019 but trails it by −0.05 in 2019–2026. Over 2012–2026 Berkshire Hathaway itself trails the market (0.77 vs 0.94). [Results](docs/RESULTADOS_FASE2A.md#2a-sigue-viva-la-receta-después-de-publicarse-no-2-de-3) |
-| **2B** | Does the factor recipe of top 13F filers, selected point-in-time, beat the S&P 500, a placebo and the recipe of all filers? | In progress |
+| **2B** | Does the factor recipe of top 13F filers, selected point-in-time, beat the S&P 500, a placebo and the recipe of all filers? | In progress. Survivorship-free price module validated: 0 of 3,449 stock-months more than 1 pp from Yahoo; spin-offs corrected from unadjusted prices. [Data validation](docs/RESULTADOS_FASE2B.md) |
 | **2C** | Does it survive implementation with investable long-only ETFs, costs and taxes? | Only if 2B passes |
 
 ### Phase 2A — Table 4 replication
@@ -96,7 +96,7 @@ flowchart LR
 ```bash
 python3.12 -m venv ~/.venvs/tiresias && source ~/.venvs/tiresias/bin/activate
 pip install -r requirements.txt
-python -m pytest tests            # 128 tests (at the repository root, pytest would also collect finetune/, which needs qlib)
+python -m pytest tests            # 152 tests (at the repository root, pytest would also collect finetune/, which needs qlib)
 python -m tiresias.buffett        # phases 2A and 2A′
 ```
 
@@ -113,7 +113,7 @@ Outputs (aggregates only) are written to `~/tiresias_resultados/fase2/`.
 ## Repository layout
 
 ```
-tiresias/      research code (phase 1: Kronos evaluation; phase 2: buffett.py, gestores.py)
+tiresias/      research code (phase 1: Kronos evaluation; phase 2: buffett.py, gestores.py, precios.py)
 tests/         unit tests (mutation-checked) and model regression tests
 docs/          pre-registered plans and results (Spanish)
 exploratorio/  exploratory work outside any pre-registered criterion

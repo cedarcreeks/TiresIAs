@@ -88,7 +88,7 @@ def test_mes_de_entrada_es_el_primer_mes_completo():
 
 def _rent(meses=12, n=12):
     idx = pd.date_range("2024-01-31", periods=meses, freq="ME")
-    return pd.DataFrame({f"S{j}": [0.01 * (j + 1)] * meses for j in range(n)}, index=idx)
+    return pd.DataFrame({f"C{j}": [0.01 * (j + 1)] * meses for j in range(n)}, index=idx)
 
 
 def _pos(cik, presentado, valores, cusips=None):
@@ -97,13 +97,9 @@ def _pos(cik, presentado, valores, cusips=None):
                          "emisor": "x", "periodo": pd.Timestamp(presentado), "accesion": f"{cik}{presentado}"})
 
 
-def _simb(c, fecha):
-    return "S" + c[1:] if c.startswith("C") else None
-
-
 def test_la_cartera_pesa_por_valor_y_entra_tras_presentarse():
     pos = _pos("1", "2024-02-14", [1.0] * 11 + [9.0])              # 12 posiciones, la última pesa 9/20
-    r, cob = G.carteras(pos, _simb, _rent())
+    r, cob = G.carteras(pos, _rent())
     s = r["1"].dropna()
     assert s.index[0] == pd.Timestamp("2024-03-31")                 # nada en febrero
     esperado = (sum(0.01 * (j + 1) for j in range(11)) + 9 * 0.12) / 20
@@ -113,7 +109,7 @@ def test_la_cartera_pesa_por_valor_y_entra_tras_presentarse():
 
 def test_dura_hasta_el_siguiente_13f():
     pos = pd.concat([_pos("1", "2024-02-14", [1.0] * 12), _pos("1", "2024-05-15", [1.0] * 12)])
-    r, _ = G.carteras(pos, _simb, _rent())
+    r, _ = G.carteras(pos, _rent())
     s = r["1"].dropna()
     assert list(s.index[:3]) == list(pd.date_range("2024-03-31", periods=3, freq="ME"))
     assert s.index[3] == pd.Timestamp("2024-06-30") and len(s) == 3 + G.MESES_MAX   # el segundo entra en junio
@@ -122,7 +118,7 @@ def test_dura_hasta_el_siguiente_13f():
 def test_sin_cobertura_o_con_pocas_posiciones_no_entra():
     pocas = _pos("2", "2024-02-14", [1.0] * 9)                       # 9 posiciones
     sin_precio = _pos("3", "2024-02-14", [1.0] * 12 + [5.0], cusips=[f"C{j}" for j in range(12)] + ["ZZZ"])
-    r, cob = G.carteras(pd.concat([pocas, sin_precio]), _simb, _rent())
+    r, cob = G.carteras(pd.concat([pocas, sin_precio]), _rent())
     c = cob.set_index("cik")
     assert not c.loc["2", "entra"] and c.loc["2", "n"] == 9
     assert not c.loc["3", "entra"] and c.loc["3", "cobertura"] == pytest.approx(12 / 17)
@@ -131,8 +127,8 @@ def test_sin_cobertura_o_con_pocas_posiciones_no_entra():
 
 def test_un_valor_que_se_retira_se_reparte():
     rent = _rent()
-    rent.loc["2024-05-31":, "S0"] = np.nan                           # S0 deja de cotizar en mayo
-    r, _ = G.carteras(_pos("1", "2024-02-14", [1.0] * 12), _simb, rent)
+    rent.loc["2024-05-31":, "C0"] = np.nan                           # C0 deja de cotizar en mayo
+    r, _ = G.carteras(_pos("1", "2024-02-14", [1.0] * 12), rent)
     mayo = r.loc["2024-05-31", "1"]
     assert mayo == pytest.approx(np.mean([0.01 * (j + 1) for j in range(1, 12)]))
 

@@ -91,8 +91,13 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
     8-jun-2022 y Meta desde el día siguiente (+1.395 % en un día, sin error);
   - un símbolo sin negociación sale **relleno con barras de volumen 0** que repiten el último cierre;
   - `adjustment=all` **sin** `asof` coincide con Yahoo: en 21 valores sin *spin-off*, mediana de |Δ| mensual
-    0,0024 pp y ningún mes por encima de 1 pp (de 2.688); el *split* de EW de 2016, ausente de los *corporate actions*,
-    sí está en el ajuste;
+    0,0024 pp y ningún mes por encima de 1 pp (de 2.688); los 16 *splits* de la muestra en 2016–2026 están en los
+    *corporate actions* (corregido el mismo día: escribí que faltaba uno de EW de 2016, de memoria; fue el
+    14-dic-2015, antes de que empiecen los datos de Alpaca, y lo que Yahoo da como *splits* que faltan son
+    *spin-offs* con proporción fraccionaria);
+  - los *corporate actions* anteriores a 2020 vienen **sin CUSIP** (los dividendos de GE de 2016–2019) y alguno con el
+    CUSIP de hoy (el *spin-off* de WAB de 2019, con el de GE de después de su *contra-split* de 2021): un evento es de
+    un CUSIP si lleva su CUSIP **o** el símbolo de uno de sus tramos en una fecha de ese tramo;
   - en los *spin-offs* no acierta ninguna de las dos fuentes: de 7 (PFE, T, GE ×3, MMM, IBM), Alpaca yerra en 3 y
     Yahoo en 4, hasta 6 pp en el mes del valor.
 
