@@ -65,6 +65,26 @@ procedimiento con gestores elegidos al azar, 200 repeticiones); (4) por encima d
 ≥ 0,05 de Sharpe: elegir tiene que aportar. Se informan también, como comparación, copiar las posiciones (las cinco de
 mayor peso de cada elegido, como las «mejores ideas» de Cohen, Polk y Silli) y el ETF GURU real.
 
+### 2B · Los datos, fijados antes de bajarlos (31-oct-2026)
+
+Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio de 2B.
+
+- **13F**: los conjuntos estructurados de la SEC (`SUBMISSION`, `COVERPAGE`, `INFOTABLE`). Sólo el **13F-HR original**
+  de cada gestor y trimestre (las enmiendas llegan después y no se sabían en la fecha de compra); la fecha de compra es
+  la de presentación (`FILING_DATE`). De cada posición, sólo acciones (`SH`; fuera los importes de deuda, `PRN`) y sin
+  opciones (`PUTCALL` vacío). El peso, por valor declarado dentro de cada 13F, así que el cambio de unidades de
+  `VALUE` de 2023 (de miles de dólares a dólares) no afecta.
+- **CUSIP → símbolo**: OpenFIGI (la cotización de EE. UU.); lo que no traduzca, contra la lista de valores **inactivos**
+  de Alpaca por nombre normalizado del emisor, y una coincidencia ambigua se descarta. Se informa qué parte del valor
+  traduce cada vía.
+- **Precios**: Alpaca, diarios, ajustados por *splits* y dividendos (`adjustment=all`), desde 2016-01-01; entran los 13F
+  presentados desde esa fecha.
+- **Cobertura mínima**: un gestor entra en un trimestre sólo si tiene precio el **≥ 90 %** del valor de sus acciones
+  declaradas y al menos 10 posiciones con precio. Se informa la cobertura agregada de cada trimestre y, como robustez,
+  el resultado con 80 % y 95 %. **Si la cobertura agregada del valor de los gestores elegibles es menor del 85 % en más
+  de un trimestre de cada cuatro, 2B se para**: el sesgo de supervivencia sería demasiado grande para medir nada.
+- **Referencia**: el S&P 500 con dividendos (`^SP500TR`); factores y tipo libre, los de 2A.
+
 ## 2C · Hecha con lo que se puede comprar
 
 Sólo si 2B pasa: la receta con ETF de factores sólo a largo (calidad, mínima volatilidad, valor, momentum, tamaño) y el
