@@ -23,11 +23,15 @@ sin construir modelos.
 
 - **Datos**: la clasificación pública (48.222 cuentas el 31-oct) y la curva de patrimonio y resultado de cada cuenta
   (`portfolio`, desde su inicio). Universo: cuentas con patrimonio ≥ 10.000 $ al inicio de A y actividad en A y en B.
+- **Muestra** (fijada el 31-oct antes de bajar ninguna curva): 6.000 cuentas al azar, uniformes, de la clasificación
+  del 31-oct, con semilla 31. La API admite 1.200 de peso por minuto e IP; el peso de `portfolio` no está documentado y
+  se pide a una consulta por segundo, así que las 48.222 serían ~13 h y la muestra ~100 min. El universo de arriba se
+  filtra **sobre la muestra**, nunca por el resultado.
 - **Ventanas**: A = 2025-11-01 → 2026-04-30 y B = 2026-05-01 → 2026-10-30 (seis meses cada una).
 - **Medida**: la rentabilidad de cada cuenta en cada ventana, su resultado dividido entre el patrimonio medio, para
   que las aportaciones y retiradas no cuenten como rentabilidad.
 - **Pasa sólo si se cumplen las dos**: (1) correlación de rangos de Spearman entre A y B positiva con p < 0,01
-  (unilateral); (2) la mediana en B del decil superior de A por encima del percentil 95 de un placebo (deciles elegidos
+  (unilateral, por permutación con 10.000 barajados); (2) la mediana en B del decil superior de A por encima del percentil 95 de un placebo (deciles elegidos
   al azar, 200 repeticiones).
 - **Sesgo declarado**: la clasificación sólo lista las cuentas que existen hoy. Las que se arruinaron y se fueron
   pueden faltar, y eso favorece la persistencia. Un «no» es por tanto fuerte; un «sí», más débil.
