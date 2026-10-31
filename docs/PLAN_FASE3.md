@@ -56,6 +56,12 @@ Criterio del clon: Sharpe en B por encima de mantener BTC en +0,10 y por encima 
   retraso legal es de hasta 45 días), y se mantiene 6 meses.
 - **Elegir a quién**: cada trimestre, con los 24 meses anteriores y sólo ellos, los congresistas cuyas operaciones
   declaradas mejor habrían rendido; se copia al decil superior.
+- **Concretado el 31-oct, antes de analizar ninguna operación**: sólo se copian las **compras** (se puede comprar,
+  no ponerse corto); cada una pesa por el centro de su tramo legal de importe (robustez: a partes iguales). El
+  historial de un congresista es la rentabilidad media a 6 meses, desde su fecha de declaración, de sus compras
+  declaradas en los 24 meses anteriores (mínimo 5). Sólo acciones con símbolo: las opciones, bonos y fondos de las
+  declaraciones no entran, y se informa de su parte. Las declaraciones en papel escaneado no se leen, y se informa de
+  cuántas son. Precios: los de Alpaca, con el mismo módulo y la misma comprobación de entidad que 2B.
 - **Pasa sólo si se cumplen las tres**: frente al SPY, Sharpe +0,10 y CAGR +1 pp en las dos mitades; por encima del
   p95 de un placebo (congresistas al azar, 200 repeticiones); y por encima de NANC en el mismo periodo.
 
