@@ -254,3 +254,17 @@ def test_la_receta_con_pesos_medios_es_la_media_de_las_estrategias():
             ref[m] = np.mean([B.aplicar_estilo(sig.loc[[m]], info[c]["p"]).iloc[0] for c in info])
     ref = pd.Series(ref).sort_index()
     assert list(r.index) == list(ref.index) and np.allclose(r.to_numpy(), ref.to_numpy(), rtol=0, atol=1e-14)
+
+
+def test_copiar_posiciones_toma_las_mayores_del_ultimo_13f_conocido():
+    rent = _rent(meses=12, n=12)                                         # C0..C11, rentabilidad 0,01·(j+1)
+    viejo = _pos("1", "2024-02-14", [float(12 - j) for j in range(12)])   # las mayores: C0..C4
+    nuevo = _pos("1", "2024-05-15", [float(j + 1) for j in range(12)])    # las mayores: C11..C7 (aún no se sabe el 31-mar)
+    decs = [(pd.Timestamp("2024-03-31"), {"1": {"t": 1.0}})]
+    r = G.copiar_posiciones(pd.concat([viejo, nuevo]), rent, decs, G.elegir_todos)
+    assert list(r.index) == list(pd.date_range("2024-04-30", periods=3, freq="ME"))
+    assert r.iloc[0] == pytest.approx(np.mean([0.01 * (j + 1) for j in range(5)]))
+    rent2 = rent.copy()
+    rent2.loc["2024-05-31", "C0"] = np.nan                                # sin precio un mes: se reparte
+    r2 = G.copiar_posiciones(pd.concat([viejo, nuevo]), rent2, decs, G.elegir_todos)
+    assert r2.loc["2024-05-31"] == pytest.approx(np.mean([0.01 * (j + 1) for j in range(1, 5)]))

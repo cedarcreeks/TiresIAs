@@ -291,6 +291,43 @@ def receta(decs: list, F: pd.DataFrame, elegir) -> pd.Series:
     return pd.Series(filas, dtype=float).sort_index()
 
 
+def copiar_posiciones(posiciones: pd.DataFrame, rent: pd.DataFrame, decs: list, elegir, top: int = 5) -> pd.Series:
+    """La comparación del plan: copiar las `top` posiciones de mayor valor (con precio) del último 13F de cada elegido
+    presentado hasta la fecha de la decisión, a partes iguales, los mismos meses que la receta. Rentabilidad total
+    mensual (no exceso); un valor sin precio un mes se reparte entre los demás."""
+    # agrupado una vez, y sólo para los elegidos alguna vez: filtrar 63 M de filas por elegido y decisión no acaba
+    por_decision = [elegir(info) for _, info in decs]
+    ciks = {c for e in por_decision for c in e}
+    sub = posiciones[posiciones["cik"].isin(ciks)]
+    grupos = {k: g for k, g in sub.groupby(["cik", "presentado"], sort=False)}
+    fechas_de = {}
+    for cik, pres in sorted(grupos):
+        fechas_de.setdefault(cik, []).append(pres)
+    filas = {}
+    for k, (d, info) in enumerate(decs):
+        elegidos = por_decision[k]
+        meses = [m for m in rent.index if m > d][:3]
+        if k + 1 < len(decs):
+            meses = [m for m in meses if m <= decs[k + 1][0]]
+        if not elegidos or not meses:
+            continue
+        cartera = []
+        for cik in elegidos:
+            conocidas = [f for f in fechas_de.get(cik, []) if f <= d]
+            if not conocidas:
+                continue
+            h = grupos[(cik, conocidas[-1])]
+            h = h[h["cusip"].isin(rent.columns) & rent.reindex(columns=h["cusip"]).loc[meses[0]].notna().to_numpy()]
+            cartera += list(h.nlargest(top, "valor")["cusip"])
+        if not cartera:
+            continue
+        for m in meses:
+            r = rent.loc[m, cartera].to_numpy(dtype=float)
+            if (~np.isnan(r)).any():
+                filas[m] = float(np.nanmean(r))
+    return pd.Series(filas, dtype=float).sort_index()
+
+
 def elegir_decil(info: dict) -> list:
     """El decil superior por la t del alfa (al menos uno)."""
     orden = sorted(info, key=lambda c: info[c]["t"], reverse=True)
