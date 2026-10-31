@@ -88,3 +88,70 @@ def test_revisar_da_un_estado_por_caso_y_pide_lo_que_falta():
     r3 = F.revisar(v, simb, prec, dict(tal, **{"BRK.B": _serie(D(2016, 2, 22), [5.0] * 60), "NEW": s}), acciones,
                    pedidos2)
     assert r3["estado"]["C1"] == "no cuadra" and r3["tramos"]["C1"] == [("BRKB", ini, fin)]
+
+
+def test_de_punta_a_punta_con_datos_sinteticos(tmp_path):
+    """FTD + 13F + una pasada de precios (escrita con descarga_2b y un Alpaca de mentira) → rentabilidades por CUSIP →
+    juicio. Un CUSIP cuyo FTD no cuadra con el precio queda fuera; el resto entra y hay veredicto."""
+    import json
+    import numpy as np
+    from tiresias import descarga_2b as X
+    rng = np.random.default_rng(7)
+    dias = pd.bdate_range("2016-01-04", "2020-12-31")
+    cusips = [f"C{j:02d}" for j in range(14)]
+    precios = {c: 50 * np.exp(np.cumsum(rng.normal(0.0004, 0.015, len(dias)))) for c in cusips}
+    simbolo = {c: "S" + c[1:] for c in cusips}
+    precios_ftd = {c: p.copy() for c, p in precios.items()}
+    precios_ftd["C13"] = precios_ftd["C13"] * 3                              # el FTD de C13 no cuadra
+    filas = []
+    for c in cusips:
+        for k in range(1, len(dias), 15):
+            filas.append((c, simbolo[c], dias[k], float(precios_ftd[c][k - 1])))
+    ftd = pd.DataFrame(filas, columns=["cusip", "simbolo", "fecha", "precio"])
+    pos = []
+    for g in range(12):
+        for p in pd.date_range("2016-02-01", "2020-08-01", freq="3MS") + pd.Timedelta(days=13):
+            for j, c in enumerate(cusips[:12] if g % 2 else cusips[2:]):
+                pos.append({"cik": str(g), "presentado": p, "periodo": p - pd.offsets.MonthEnd(2), "cusip": c,
+                            "valor": float(1 + (j + g) % 5), "accesion": f"{g}-{p.date()}", "emisor": "x"})
+    pos = pd.DataFrame(pos)
+    barras = {simbolo[c]: {d.date(): (float(x), 1000) for d, x in zip(dias, precios[c])} for c in cusips}
+
+    class Falso:
+        sin_datos = []
+        def barras(self, simbolos, desde, hasta, ajuste, asof=None, solos=None):
+            a, h = dt.date.fromisoformat(desde), dt.date.fromisoformat(hasta)
+            return {s: {f: x for f, x in barras[s].items() if a <= f <= h} for s in simbolos if s in barras}
+        def acciones(self, desde, hasta, cusips=(), simbolos=()):
+            return {}
+    simb, _ = F.registros(ftd)
+    from tiresias import precios as P
+    _, rangos = P.plan(F.ventanas(pos, D(2020, 12, 31)), simb, {})
+    ped = F.pedido(rangos, cusips)
+    d1 = tmp_path / "p1"
+    X.ejecutar(ped, d1, Falso())
+    (d1 / "pedido.json").write_text(json.dumps(ped))
+    r = F.rentabilidades_por_cusip(pos, ftd, [d1], D(2020, 12, 31))
+    # C13 no cuadra con su símbolo: se pide la forma con punto, y sólo eso
+    assert [b["simbolos"] for b in r["falta"]["barras"]] == [["S1.3"]] and r["estado"]["C00"] == "ok"
+    d2 = tmp_path / "p2"
+    X.ejecutar(r["falta"], d2, Falso())                                      # la forma con punto no existe
+    (d2 / "pedido.json").write_text(json.dumps(r["falta"]))
+    r = F.rentabilidades_por_cusip(pos, ftd, [d1, d2], D(2020, 12, 31))
+    assert "falta" not in r and r["estado"]["C13"] == "no cuadra" and r["estado"]["C00"] == "ok"
+    assert "C13" not in r["rent"].columns and set(r["rent"].columns) == set(cusips) - {"C13"}
+    meses = pd.date_range("2016-01-31", "2020-12-31", freq="ME")
+    Fac = pd.DataFrame(rng.normal(0.005, 0.03, (len(meses), 6)), index=meses, columns=G.SEIS)
+    Fac["RF"] = 0.001
+    sp = pd.Series(rng.normal(0.008, 0.04, len(meses)), index=meses)
+    j = F.juicio(pos, r["rent"], Fac, sp, reps=5)
+    assert not j["parada"]["para"] and j["parada"]["bajos"] == 0
+    assert j["receta"].index.min() >= pd.Timestamp("2019-04-30") and len(j["placebo"]) == 5
+    assert set(j["veredicto"]["criterios"]) == {"1_frente_al_sp500", "2_en_las_dos_mitades", "3_sobre_el_placebo_p95",
+                                                "4_sobre_todos_los_gestores"} and j["veredicto"]["de"] == 4
+    # los factores acaban antes que los precios (AQR, como en los datos reales): el juicio no se cae
+    j2 = F.juicio(pos, r["rent"], Fac.loc[:"2020-09-30"], sp, reps=2)
+    assert j2["receta"].index.max() <= pd.Timestamp("2020-09-30")
+    # sin precio para casi nada, para antes de elegir a nadie
+    j3 = F.juicio(pos, r["rent"][["C00", "C01"]], Fac, sp, reps=2)
+    assert j3["parada"]["para"] and "receta" not in j3

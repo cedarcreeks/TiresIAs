@@ -96,7 +96,7 @@ flowchart LR
 ```bash
 python3.12 -m venv ~/.venvs/tiresias && source ~/.venvs/tiresias/bin/activate
 pip install -r requirements.txt
-python -m pytest tests            # 172 tests (at the repository root, pytest would also collect finetune/, which needs qlib)
+python -m pytest tests            # 173 tests (at the repository root, pytest would also collect finetune/, which needs qlib)
 python -m tiresias.buffett        # phases 2A and 2A′
 ```
 

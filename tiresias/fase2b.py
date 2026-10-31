@@ -138,10 +138,12 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
         pendientes[s] = (min(x, i), max(y, f))
     def juzgar(s, regs, i, f):
         """«ok», «sin contraste», «sin datos» (pedido y vacío), «no cuadra» o «pendiente» (sin pedir aún)."""
-        if not pedido_cubre(s, i - MARGEN, f):
-            pedir(s, i - MARGEN, f)
+        # el tramo ya empieza con el margen del cierre de partida (`ventanas`): sin margen otra vez, o nunca está
+        # cubierto y todo vuelve a pedirse (lo cazó el test de punta a punta)
+        if not pedido_cubre(s, i, f):
+            pedir(s, i, f)
             return "pendiente"
-        serie = _dentro(tal_cual.get(s, {}), i - MARGEN, f)
+        serie = _dentro(tal_cual.get(s, {}), i, f)
         if not serie:
             return "sin datos"
         n, med = P.contraste_ftd(regs, serie)
