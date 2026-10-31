@@ -14,6 +14,7 @@ reported as prominently as positive ones.
 | 2A | Can *Buffett's Alpha* be reproduced from public data? | **Yes** · 3 of 3 |
 | 2A′ | Does Buffett's factor recipe still work after it was published? | **Partly** · ahead of the market in 2012–19, not in 2019–26 |
 | 2B | Does the recipe of the best 13F managers, picked without hindsight, beat the S&P 500? | **No** · 1 of 4 |
+| 2D | Do managers' "best ideas" (Cohen, Polk & Silli) still pay, twenty years on? | **No** · 0 of 3, alpha now negative |
 | 3A | Do the Hyperliquid traders winning *now* keep winning? | **No** · 1 of 2 |
 | 3C | Does copying the right members of Congress beat the S&P 500? | **No** · 0 of 3 |
 
@@ -28,6 +29,9 @@ Plans: [phase 2](docs/PLAN_FASE2.md) · [phase 3](docs/PLAN_FASE3.md). Documents
   without hindsight from 12,473 filers, returned a Sharpe ratio of 0.79 in 2019–2026 against 0.83 for the S&P 500
   with dividends; an oracle that knew next quarter's winners reached 2.28, so the machinery can see skill when it
   exists.
+- **Managers' best ideas stopped paying.** The highest-conviction overweight of each active 13F manager earned a
+  four-factor alpha of 29 bp a month in 1991–2005; in 2016–2026 it is −11 bp (t −2.4), below a random holding of
+  the same manager.
 - **Yesterday's leaders are tomorrow's laggards.** On Hyperliquid, the top 10 % of traders over six months earned half
   as much as randomly chosen traders over the next six; the extremes, winners and losers, did worst.
 - **Copying holdings has not paid.** The Global X Guru ETF, which copies hedge funds' 13F positions, returned 5.9 % a

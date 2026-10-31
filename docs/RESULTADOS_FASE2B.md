@@ -64,6 +64,46 @@ un plan nuevo**, no un resultado.
 - La receta es una construcción con factores en largo y corto, antes de impuestos: aunque hubiera pasado, faltaría 2C.
 
 
+## 2D · Las mejores ideas, veinte años después: NO (0 de 3) — y el signo se da la vuelta
+
+Plan: [PLAN_FASE2.md](PLAN_FASE2.md), apartado 2D, fijado el 1-nov antes de calcular. Método de Cohen, Polk y Silli: la
+mejor idea de cada gestor es su mayor *tilt* (peso en la cartera menos peso en el mercado, aquí la suma de los 13F); el
+25 % de 13F con mayor *tilt*; a partes iguales; en la fecha pública; con 0,1 % por lado de cada operación.
+
+| 2016-02 → 2026-08 (127 meses) | Sharpe neto | CAGR neto | Alfa de 4 factores, al mes (bruto) |
+|---|---|---|---|
+| Mejores ideas, *tilt* frente al mercado (la definición principal) | 0,755 | 12,6 % | **−0,11 % (t −2,44)** |
+| Mejores ideas, *tilt* frente a la propia cartera (robustez) | 0,732 | 12,1 % | **−0,13 % (t −2,61)** |
+| S&P 500 con dividendos | 0,911 | 15,8 % | — |
+| Placebo (un valor al azar de cada gestor, 200 veces), mediana / p95 | 0,769 / 0,815 | — | — |
+
+| Criterio | |
+|---|---|
+| 1 · Alfa de cuatro factores positivo con t ≥ 2 | **no**: negativo, con t −2,44 |
+| 2 · Sharpe +0,10 y CAGR +1 pp frente al S&P 500, total y por mitades | **no** |
+| 3 · Por encima del p95 del placebo | **no**: por debajo de su mediana |
+
+50.939 mejores ideas de 5.365 gestores; coste de rotación ~0,22 % al año.
+
+**La lectura.** De 1991 a 2005 los autores midieron 29 pb al mes de alfa (t 2,24). De 2016 a 2026, con los 13F
+públicos, la anomalía no sólo desaparece: se invierte. Las mejores ideas rinden por debajo de lo que explican los
+factores, y por debajo de elegir un valor al azar de la cartera del mismo gestor.
+
+Una explicación posible, **sin medir aquí**: sobreponderar frente al mercado obliga, por construcción, a infraponderar
+a las más grandes, y en esta década ganaron las más grandes.
+
+**Lo que se lleva quien lo lea**: la convicción declarada de un gestor no es una señal que pague, al menos hoy.
+
+**Sobre lo que contaminaba.** El 0,89 de copiar las cinco mayores posiciones del decil de gestores por alfa (2B) era
+otra definición y otro periodo (2019→). Con la definición de los autores y desde 2016, no hay nada.
+
+**Dónde queda flojo.**
+
+- El peso en el mercado se aproxima con la suma de los 13F, porque no hay capitalización en los datos.
+- Entran gestores que no son fondos de inversión.
+- Las dos variantes ponderadas por riesgo idiosincrático, las de mayor alfa en el artículo, no se probaron.
+- La fecha pública retrasa la entrada respecto a la fecha de la cartera.
+
 ## Los datos: 13F y FTD (31-oct-2026)
 
 **De dónde vienen.** La SEC respondió 403 («Request Rate Threshold Exceeded») a los programas desde la IP de la casa
