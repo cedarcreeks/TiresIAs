@@ -256,3 +256,23 @@ def test_un_mes_sin_cierre_del_anterior_no_cuenta():
     series = {"all": {"X": raw}, "raw": {"X": raw}, "tal_cual": {"X": raw}}
     out, _ = P.rentabilidades({"C": [("X", D(2015, 12, 21), f[-1])]}, series, {}, {}, {"C": (D(2015, 12, 21), f[-1])})
     assert list(out["C"]) == [D(2016, 2, 29)]
+
+
+# ── 6. la traducción, comprobada con el precio del FTD ───────────────────────
+def test_forma_con_punto():
+    assert P.forma_con_punto("BRKB") == "BRK.B" and P.forma_con_punto("BRK.B") is None and P.forma_con_punto("X") is None
+
+
+def test_el_contraste_compara_con_el_cierre_del_dia_habil_anterior():
+    f = _dias(D(2024, 1, 2), 5)                                     # 2 al 8 de enero
+    tal_cual = _barras(f, [100, 101, 102, 103, 104])
+    tal_cual[f[2]] = (102, 0)                                       # una barra de relleno no cuenta
+    regs = [(f[1], 100.0), (f[4], 103.0), (f[3], 101.0), (f[2], float("nan"))]
+    n, med = P.contraste_ftd(regs, tal_cual)
+    assert n == 3 and med == pytest.approx(0.0)                     # el del 5-ene compara con el 3 (el 4 es relleno)
+    n, med = P.contraste_ftd([(f[1], 50.0), (f[4], 103.0), (f[3], 101.0)], tal_cual)
+    assert n == 3 and med == pytest.approx(0.0)                     # una discrepancia no mueve la mediana
+    assert P.contraste_ftd([(f[1], 200.0)], tal_cual)[1] == pytest.approx(1.0)
+    assert P.contraste_ftd([(f[1], float("nan"))], tal_cual) == (0, None)
+    assert P.contraste_ftd([(f[3], 101.0)], tal_cual) == (1, pytest.approx(0.0))     # salta el relleno del 4-ene
+    assert P.contraste_ftd([(D(2024, 2, 20), 104.0)], tal_cual) == (0, None)          # sin cierre en la semana previa

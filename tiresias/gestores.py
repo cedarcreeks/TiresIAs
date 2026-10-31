@@ -85,7 +85,8 @@ def leer_13f(ruta) -> pd.DataFrame:
 # ── 2. CUSIP → símbolo, con fecha ────────────────────────────────────────────
 def leer_ftd(texto: str) -> pd.DataFrame:
     """Un fichero de fails-to-deliver de la SEC (`SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY|DESCRIPTION|PRICE`):
-    (cusip, simbolo, fecha) únicos, de las filas con fecha, CUSIP de 9 caracteres y símbolo.
+    (cusip, simbolo, fecha, precio) únicos, de las filas con fecha, CUSIP de 9 caracteres y símbolo. `precio` es, según
+    la SEC, el cierre del día anterior (NaN si viene «.»); el símbolo de una clase va sin punto (BRKB por BRK.B).
 
     Las filas se cuentan contra la línea final del fichero («Trailer record count N») y una que no tenga sus seis
     campos hace fallar la lectura: nada se salta en silencio. Una barra dentro de la descripción no rompe la fila
@@ -104,10 +105,12 @@ def leer_ftd(texto: str) -> pd.DataFrame:
         partes = linea.split("|")
         if len(partes) < 6:
             raise ValueError(f"FTD, línea {i + 1} sin sus seis campos: {linea[:80]!r}")
-        filas.append((partes[1].strip().upper(), partes[2].strip().upper(), partes[0].strip()))
+        precio = partes[-1].strip()
+        filas.append((partes[1].strip().upper(), partes[2].strip().upper(), partes[0].strip(),
+                      float(precio) if re.fullmatch(r"\d+(\.\d+)?", precio) else float("nan")))
     if declaradas is not None and declaradas != len(filas):
         raise ValueError(f"FTD: {len(filas)} filas leídas y el fichero declara {declaradas}")
-    df = pd.DataFrame(filas, columns=["cusip", "simbolo", "fecha"])
+    df = pd.DataFrame(filas, columns=["cusip", "simbolo", "fecha", "precio"])
     df = df[df["fecha"].str.fullmatch(r"\d{8}") & (df["cusip"].str.len() == 9) & (df["simbolo"] != "")]
     out = df.assign(fecha=pd.to_datetime(df["fecha"], format="%Y%m%d")).drop_duplicates().reset_index(drop=True)
     out.attrs["declaradas"] = declaradas

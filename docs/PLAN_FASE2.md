@@ -81,6 +81,13 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
   cercano **anterior** a la fecha de presentación del 13F (y, si no lo hay, el primero posterior dentro de 90 días);
   **después**, OpenFIGI (la cotización compuesta de EE. UU.); **por último**, los inactivos de Alpaca por nombre
   normalizado del emisor, descartando una coincidencia ambigua. Se informa qué parte del valor traduce cada vía.
+  **Comprobada con el precio** (31-oct, antes de bajar ningún precio de 2B): según la SEC, el `PRICE` de cada registro
+  FTD es «el cierre del día anterior»; frente al cierre sin ajustar de Alpaca del día hábil anterior, en los 27 valores
+  de la validación y los FTD de 2015-12 a 2018-11, 13.529 registros con mediana y p99 de |Δ| de 0,000 % (2 por encima
+  del 2 %: AVGO en febrero de 2016, con un precio de relleno de 1,00). **Regla**: un tramo (CUSIP, símbolo) vale si la
+  mediana de |Δ| de sus registros con precio es ≤ 1 %; el FTD escribe las clases sin punto (BRKB por BRK.B) y no se
+  puede poner a ciegas (BRKL y BRKR son otras empresas), así que si el símbolo no cuadra se prueba la forma con punto, y
+  si ninguna cuadra, ese CUSIP no tiene precio. Un tramo sin registros con precio se informa aparte.
   **Contraste** (añadido el 31-oct, antes de bajar ningún 13F): los *corporate actions* de Alpaca llevan CUSIP y
   símbolo con fecha (dividendos, *splits*, cambios de nombre, fusiones); donde coincidan con un FTD, se informa la
   concordancia de las dos traducciones, y un CUSIP en que discrepen no entra.

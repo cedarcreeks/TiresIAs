@@ -65,6 +65,8 @@ FTD = ("SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
 def test_el_ftd_cuenta_contra_su_recuento_y_no_salta_filas():
     t = G.leer_ftd(FTD)
     assert len(t) == 3 and t.attrs["declaradas"] == 3
+    assert t.set_index("simbolo").loc["FRCB", "precio"] == 0.5
+    assert np.isnan(G.leer_ftd(FTD.replace("|0.5\n", "|.\n")).set_index("simbolo").loc["FRCB", "precio"])
     con_barra = FTD.replace("TWITTER INC", "TWITTER | INC")                 # una barra en la descripción
     assert len(G.leer_ftd(con_barra)) == 3
     with pytest.raises(ValueError, match="declara 4"):

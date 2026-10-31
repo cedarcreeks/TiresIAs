@@ -15,6 +15,7 @@ Piezas, cada una con sus tests (tests/test_tiresias_precios.py):
 """
 from __future__ import annotations
 
+import bisect
 import datetime as dt
 import json
 import time
@@ -26,6 +27,7 @@ SALTO_MAX = 0.40          # un salto diario mayor sin evento que lo explique des
 TOLERANCIA_ENTIDAD = 1e-4  # diferencia relativa admitida entre el cierre por defecto y el de lo que cotizó
 CAIDA_PESIMISTA = 0.5     # salida sin fusión con el último cierre por debajo de la mitad del máximo de 12 meses
 DIAS_SALIDA = 7           # un valor que deja de cotizar más de 7 días antes del fin de su ventana ha salido de bolsa
+CONTRASTE_MAX = 0.01      # mediana de |Δ| entre el precio del FTD y el cierre de Alpaca para dar por buena una traducción
 
 UN_DIA = dt.timedelta(days=1)
 
@@ -61,6 +63,32 @@ def tramos(registros: list, desde: dt.date, hasta: dt.date, cambios: list = (), 
                 t[2] = f - UN_DIA
                 break
     return [tuple(t) for t in out if t[1] <= t[2]]
+
+
+def forma_con_punto(simbolo: str):
+    """El FTD escribe las clases sin punto (BRKB, BFB, LENB, HEIA); Alpaca, con él. No se puede poner a ciegas: BRKL y
+    BRKR son otras empresas. Esta es la forma candidata, que sólo vale si cuadra con el precio del FTD."""
+    return simbolo[:-1] + "." + simbolo[-1] if len(simbolo) >= 2 and "." not in simbolo else None
+
+
+def contraste_ftd(registros: list, tal_cual: dict) -> tuple:
+    """(comparados, mediana de |Δ|) entre el precio de cada registro FTD [(fecha de liquidación, precio)] —el cierre
+    del día anterior, según la SEC— y el cierre sin ajustar de lo que cotizó con el símbolo el día hábil anterior.
+    Medido el 31-oct con 27 valores conocidos: mediana y p99, 0,000 %. Sin registros con precio, (0, None)."""
+    cierres = _con_volumen(tal_cual)
+    fechas = sorted(cierres)
+    difs = []
+    for f, precio in registros:
+        if precio is None or precio != precio or precio <= 0:
+            continue
+        i = bisect.bisect_left(fechas, f) - 1
+        if i >= 0 and (f - fechas[i]).days <= 7:
+            difs.append(abs(precio / cierres[fechas[i]] - 1))
+    if not difs:
+        return 0, None
+    difs.sort()
+    k = len(difs)
+    return k, (difs[k // 2] if k % 2 else (difs[k // 2 - 1] + difs[k // 2]) / 2)
 
 
 # ── 2. la serie diaria de un CUSIP ───────────────────────────────────────────
