@@ -141,3 +141,23 @@ def test_la_cartera_copia_solo_a_los_elegidos_del_trimestre_anterior():
     assert s[d1] == pytest.approx((3 * 0.01 + 1 * 0.05) / 4) and s[d2] == pytest.approx(0.02)
     s2 = C.cartera_diaria(ps, {dt.date(2021, 3, 31): {"A", "B"}}, ponderar=False)
     assert s2[d1] == pytest.approx((0.01 + 0.05) / 2)
+
+
+def test_ventanas_de_precio_por_simbolo():
+    import datetime as dt
+    c = [{"ticker": "A", "presentado": dt.date(2020, 1, 15)}, {"ticker": "A", "presentado": dt.date(2021, 6, 1)},
+         {"ticker": "B", "presentado": dt.date(2022, 3, 1)}]
+    v = C.ventanas_precios(c)
+    assert v["A"] == (dt.date(2020, 1, 5), dt.date(2021, 6, 1) + dt.timedelta(days=192))
+    assert v["B"] == (dt.date(2022, 2, 19), dt.date(2022, 3, 1) + dt.timedelta(days=192))
+
+
+def test_rentabilidades_diarias_con_la_comprobacion_de_entidad():
+    import datetime as dt
+    from tiresias import precios as P
+    f = [dt.date(2020, 1, 2) + dt.timedelta(days=k) for k in range(5)]
+    b = {d: (100.0 + k, 10) for k, d in enumerate(f)}
+    otra = {d: (5.0, 10) for d in f}                                        # el símbolo hoy es de otra empresa
+    series = {"all": {"A": b, "Z": otra}, "raw": {"A": b, "Z": otra}, "tal_cual": {"A": b, "Z": b}}
+    r, cam = C.rentabilidades_diarias({"A": (f[0], f[-1]), "Z": (f[0], f[-1])}, series, P.IndiceAcciones({}))
+    assert cam == {"A": "alpaca", "Z": "reconstruida"} and r["A"][f[1]] == pytest.approx(0.01)

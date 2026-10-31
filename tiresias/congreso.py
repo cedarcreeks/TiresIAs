@@ -219,3 +219,31 @@ def cartera_diaria(posiciones: list, elegidos: dict, ponderar: bool = True):
             num[f] = num.get(f, 0.0) + w * x
             den[f] = den.get(f, 0.0) + w
     return pd.Series({f: num[f] / den[f] for f in sorted(num)}, dtype=float)
+
+
+# ── 6. los precios de las compras ────────────────────────────────────────────
+def ventanas_precios(compras: list, dias: int = DIAS_TENENCIA, margen: int = 10) -> dict:
+    """{símbolo: (desde, hasta)}: de unos días antes de su primera presentación (el cierre de partida) a su última
+    presentación más la tenencia y un margen (la entrada es el día de mercado siguiente)."""
+    import datetime as dt
+    out = {}
+    for c in compras:
+        a = c["presentado"] - dt.timedelta(days=margen)
+        b = c["presentado"] + dt.timedelta(days=dias + margen)
+        x, y = out.get(c["ticker"], (a, b))
+        out[c["ticker"]] = (min(x, a), max(y, b))
+    return out
+
+
+def rentabilidades_diarias(ventanas: dict, series: dict, indice) -> tuple:
+    """({símbolo: {fecha: r}}, {símbolo: camino}) con `precios.serie_diaria`, la misma comprobación de entidad que 2B
+    (lo que cotizó con ese símbolo en esas fechas frente a la consulta por defecto) y los eventos por símbolo y fecha."""
+    from tiresias import precios as P
+    out, caminos = {}, {}
+    for s, (desde, hasta) in ventanas.items():
+        tb = [(s, desde, hasta, series["all"].get(s, {}), series["raw"].get(s, {}), series["tal_cual"].get(s, {}))]
+        r, camino, _ = P.serie_diaria(tb, indice.de(s, [(s, desde, hasta)]), {}, hasta)
+        caminos[s] = camino
+        if r:
+            out[s] = r
+    return out, caminos
