@@ -80,6 +80,11 @@ def test_revisar_da_un_estado_por_caso_y_pide_lo_que_falta():
     assert set(r["rangos_pendientes"]) == {"BRK.B", "Y.Y", "NEW"}
     assert r["tramos"]["C5"] == [("OLD", ini, D(2016, 3, 31)), ("NEW", D(2016, 4, 1), fin)]
     assert r["ajenos"] == {("SPUN", D(2016, 3, 15))}
+    # una fusión en acciones sin símbolo del comprador no pide nada (Alpaca daría 400 al lote entero)
+    sin = dict(acciones, stock_mergers=[{"id": "m", "acquiree_cusip": "C2", "acquiree_symbol": "X", "acquirer_symbol": "",
+                                         "effective_date": "2016-05-02"}])
+    r0 = F.revisar(v, simb, prec, tal, sin, pedidos)
+    assert r0["ajenos"] == {("SPUN", D(2016, 3, 15))} and "" not in r0["rangos_pendientes"]
     # segunda pasada: BRK.B cuadra; Y.Y se pidió y no trae nada; NEW ya está
     pedidos2 = dict(pedidos, **{k: (ini - F.MARGEN, fin) for k in ("BRK.B", "Y.Y", "NEW")})
     r2 = F.revisar(v, simb, prec, dict(tal, **{"BRK.B": s, "NEW": s}), acciones, pedidos2)

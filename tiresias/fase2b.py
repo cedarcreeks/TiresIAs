@@ -139,6 +139,8 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
         pendientes[s] = (min(x, i), max(y, f))
     def juzgar(s, regs, i, f):
         """«ok», «sin contraste», «sin datos» (pedido y vacío), «no cuadra» o «pendiente» (sin pedir aún)."""
+        if not s:                       # un símbolo vacío no se pide nunca: Alpaca da 400 a la petición entera
+            return "sin datos"
         # el tramo ya empieza con el margen del cierre de partida (`ventanas`): sin margen otra vez, o nunca está
         # cubierto y todo vuelve a pedirse (lo cazó el test de punta a punta)
         if not pedido_cubre(s, i, f):
@@ -172,10 +174,14 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
         estado[c] = next((x for x in ("no cuadra", "pendiente", "sin contraste") if x in estados), "ok")
         acc_f = indice.de(c, finales)
         for d in acc_f.get("spin_offs", []):
-            ajenos.add((d["new_symbol"], dt.date.fromisoformat(d["ex_date"])))
+            if d.get("new_symbol"):
+                ajenos.add((d["new_symbol"], dt.date.fromisoformat(d["ex_date"])))
         for k in ("stock_mergers", "stock_and_cash_mergers"):
             for d in acc_f.get(k, []):
-                ajenos.add((d["acquirer_symbol"], dt.date.fromisoformat(d["effective_date"])))
+                # sin símbolo del comprador (271 fusiones en acciones) no hay cierre que pedir: la salida se queda
+                # en el último cierre, como cualquier fusión sin valorar
+                if d.get("acquirer_symbol"):
+                    ajenos.add((d["acquirer_symbol"], dt.date.fromisoformat(d["effective_date"])))
     return {"tramos": tramos, "estado": estado, "rangos_pendientes": pendientes, "ajenos": ajenos}
 
 
