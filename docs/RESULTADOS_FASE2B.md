@@ -1,6 +1,68 @@
-# TiresIAs · Fase 2B · Resultados (en curso)
+# TiresIAs · Fase 2B · Resultados
 
 Plan y criterios: [PLAN_FASE2.md](PLAN_FASE2.md), apartado 2B, fijados antes de bajar los datos.
+
+## Veredicto: NO (1 de 4) — la receta de los mejores gestores 13F no bate al S&P 500
+
+Se eligió el decil superior de gestores por la t de su alfa a 36 meses, sin mirar al futuro, y se aplicó su receta de
+factores (la construcción de 2A′). Juicio de 2019-04 a 2026-08 (89 meses), neto del 0,5 % anual de coste:
+
+| | Sharpe | CAGR |
+|---|---|---|
+| Receta del decil superior | 0,794 | 15,6 % |
+| S&P 500 con dividendos | 0,831 | 16,2 % |
+| Receta de todos los gestores | 0,767 | 14,3 % |
+| Placebo (decil al azar, 200 veces), mediana / p95 | 0,767 / 0,792 | — |
+
+| Criterio | | |
+|---|---|---|
+| 1 · Sharpe +0,10 y CAGR +1 pp frente al S&P 500 | −0,04 y −0,6 pp | **no** |
+| 2 · Lo mismo en las dos mitades | — | **no** |
+| 3 · Por encima del p95 del placebo | 0,794 frente a 0,792 | sí, por un pelo |
+| 4 · +0,05 de Sharpe sobre «todos los gestores» | +0,027 | **no** |
+
+**Robusteces.** El criterio 3 no aguanta: con cobertura mínima del 80 %, 0,752 frente a 0,758; con el 95 %, 0,800
+frente a 0,848. Con la cota pesimista de las salidas de bolsa, el resultado es el mismo que el principal (1 de 4).
+Ninguna variante bate al S&P 500.
+
+**Control positivo, para saber que la maquinaria ve la habilidad cuando la hay.** Si se elige con un oráculo (los
+gestores con mejor rentabilidad real el trimestre siguiente), copiar sus carteras da Sharpe 2,28 y CAGR 53,8 %; un decil
+al azar, 0,70 y 13,3 %. El «no» no es un fallo del montaje.
+
+**Comparaciones del plan (informativas, sin criterio).**
+
+| | Sharpe | CAGR |
+|---|---|---|
+| Copiar las cinco mayores posiciones de cada elegido | 0,891 | 18,1 % |
+| ETF GURU real | 0,532 | 11,7 % |
+
+Copiar las mejores ideas de los elegidos queda por encima del S&P 500 (+0,06 de Sharpe, +1,9 pp de CAGR). No se probó
+con placebo ni por mitades, y queda por debajo de la vara de +0,10 que se exigió a la receta. Es una **hipótesis para
+un plan nuevo**, no un resultado.
+
+**Los datos del juicio.**
+
+- La cobertura agregada con precio, por trimestre, va del 88,6 % al 99 %, con mediana 95,4 %: la regla de parada no
+  salta.
+- Los CUSIP con traducción comprobada con el precio del FTD son 21.221; otros 8.963 «no cuadran» o no existen en
+  Alpaca (OTC, extranjeros); su peso en valor ya está en la cobertura.
+- Los corporate actions de Alpaca coinciden con la traducción de los FTD en el 99,5 % de 236.641 comparaciones; los
+  881 CUSIP que discrepan quedan fuera.
+- Se eligen entre 102 y 372 gestores por decisión, con mediana 230.
+
+**Lo que no funcionó, mío** (todo cazado antes de dar cifras):
+
+- la revisión pedía el margen dos veces y habría repetido la descarga entera;
+- `acciones_de` era de orden CUSIP × eventos: más de 51 minutos sin acabar, frente a 1 minuto con el índice;
+- un símbolo vacío iba al pedido;
+- el «trimestre anterior» de 3C caía en el mismo trimestre.
+
+**Dónde queda flojo.**
+
+- Los *spin-offs* y fusiones de antes de 2020 que Alpaca no registra quedan sin corregir.
+- Los factores de AQR acaban en 2026-08 y fijan el final del juicio.
+- La receta es una construcción con factores en largo y corto, antes de impuestos: aunque hubiera pasado, faltaría 2C.
+
 
 ## Los datos: 13F y FTD (31-oct-2026)
 

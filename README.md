@@ -13,16 +13,23 @@ reported as prominently as positive ones.
 | 1 | Does a foundation model for candlesticks (Kronos) forecast anything tradable? | **No** · 0 of 5 tests |
 | 2A | Can *Buffett's Alpha* be reproduced from public data? | **Yes** · 3 of 3 |
 | 2A′ | Does Buffett's factor recipe still work after it was published? | **Partly** · ahead of the market in 2012–19, not in 2019–26 |
-| 2B | Does the recipe of the best 13F managers, picked without hindsight, beat the S&P 500? | Running |
-| 3 | Do the traders and politicians winning *now* keep winning, and can they be imitated? | Running |
+| 2B | Does the recipe of the best 13F managers, picked without hindsight, beat the S&P 500? | **No** · 1 of 4 |
+| 3A | Do the Hyperliquid traders winning *now* keep winning? | **No** · 1 of 2 |
+| 3C | Does copying the right members of Congress beat the S&P 500? | Running |
 
-Results: [phase 1](docs/RESULTADOS_RONDA2.md) · [2A and 2A′](docs/RESULTADOS_FASE2A.md) · [2B](docs/RESULTADOS_FASE2B.md).
+Results: [phase 1](docs/RESULTADOS_RONDA2.md) · [2A and 2A′](docs/RESULTADOS_FASE2A.md) · [2B](docs/RESULTADOS_FASE2B.md) · [3](docs/RESULTADOS_FASE3.md).
 Plans: [phase 2](docs/PLAN_FASE2.md) · [phase 3](docs/PLAN_FASE3.md). Documents are in Spanish.
 
 ## What we have learned
 
 - **Buffett is mostly factors.** Adding low beta (BAB) and quality (QMJ) to the usual four factors cuts Berkshire's
   alpha from 10.0 % to 4.0 % a year, and it stops being significant, as the paper found.
+- **Picking the best managers doesn't beat the index.** The factor recipe of the top-decile 13F managers, chosen
+  without hindsight from 12,473 filers, returned a Sharpe ratio of 0.79 in 2019–2026 against 0.83 for the S&P 500
+  with dividends; an oracle that knew next quarter's winners reached 2.28, so the machinery can see skill when it
+  exists.
+- **Yesterday's leaders are tomorrow's laggards.** On Hyperliquid, the top 10 % of traders over six months earned half
+  as much as randomly chosen traders over the next six; the extremes, winners and losers, did worst.
 - **Copying holdings has not paid.** The Global X Guru ETF, which copies hedge funds' 13F positions, returned 5.9 % a
   year against 10.8 % for the S&P 500 over ten years ([PortfoliosLab](https://portfolioslab.com/tools/stock-comparison/GURU/SPY)).
   NANC, the ETF that copies Democratic members of Congress, beat the S&P 500 from 2023 to 2026 only through extra
