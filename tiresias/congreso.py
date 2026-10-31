@@ -107,3 +107,39 @@ def operaciones(texto: str) -> list:
                     "fecha_operacion": f_op, "fecha_notificacion": f_not, "importe_min": minimo,
                     "importe_max": TRAMOS.get(minimo), "clase": clase[0] if clase else None})
     return out
+
+
+# ── 4. de los PDF a la tabla de compras ──────────────────────────────────────
+def texto_pdf(ruta: pathlib.Path) -> str:
+    """El texto de un PDF con `pdftotext -layout` (de Poppler); cadena vacía si no tiene texto (papel escaneado)."""
+    import shutil
+    import subprocess
+    exe = shutil.which("pdftotext") or "/opt/homebrew/bin/pdftotext"
+    return subprocess.run([exe, "-layout", str(ruta), "-"], capture_output=True, text=True).stdout
+
+
+def extraer(ptrs: list, carpeta: pathlib.Path, leer=texto_pdf) -> tuple:
+    """(operaciones, informe): una fila por operación con el congresista y la **fecha de presentación** del índice, que
+    es cuando se pudo ver; el informe cuenta declaraciones con texto, sin texto (papel) y sin PDF."""
+    import datetime as dt
+    filas, informe = [], {"con_texto": 0, "sin_texto": 0, "sin_pdf": 0}
+    for p in ptrs:
+        f = carpeta / p["anio"] / f"{p['docid']}.pdf"
+        if not f.exists():
+            informe["sin_pdf"] += 1
+            continue
+        txt = leer(f)
+        if len(txt.strip()) < 50:
+            informe["sin_texto"] += 1
+            continue
+        informe["con_texto"] += 1
+        presentado = dt.datetime.strptime(p["presentado"], "%m/%d/%Y").date()
+        for o in operaciones(txt):
+            filas.append({"congresista": f"{p['apellido']}, {p['nombre']} ({p['distrito']})", "docid": p["docid"],
+                          "presentado": presentado, **o})
+    return filas, informe
+
+
+def compras(filas: list) -> list:
+    """Las que se copian (PLAN_FASE3, 3C): compras de acciones con símbolo; sin clase (formato antiguo) o con «ST»."""
+    return [f for f in filas if f["tipo"] == "P" and f["ticker"] and f["clase"] in (None, "ST")]

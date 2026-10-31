@@ -80,3 +80,19 @@ def test_el_formato_de_2016():
     assert [o["ticker"] for o in ops] == ["T", "BAX", "LEE", "FOXA", "OMG"]
     assert [o["tipo"] for o in ops] == ["P", "S", "S", "P", "S"]
     assert ops[2]["fecha_operacion"] == "09/7/2016" and ops[4]["clase"] == "OP"
+
+
+def test_extraer_usa_la_fecha_de_presentacion_y_cuenta_lo_que_no_se_lee(tmp_path):
+    (tmp_path / "2016").mkdir()
+    for d in ("1", "2"):
+        (tmp_path / "2016" / f"{d}.pdf").write_bytes(b"%PDF")
+    ptrs = [{"apellido": "Brooks", "nombre": "Mo", "distrito": "AL05", "presentado": "11/15/2016", "docid": "1", "anio": "2016"},
+            {"apellido": "X", "nombre": "Y", "distrito": "CA01", "presentado": "11/15/2016", "docid": "2", "anio": "2016"},
+            {"apellido": "Z", "nombre": "W", "distrito": "TX01", "presentado": "11/15/2016", "docid": "3", "anio": "2016"}]
+    leer = lambda f: PTR_2016 if f.stem == "1" else ""                      # el 2 es papel escaneado; el 3 no está
+    filas, inf = C.extraer(ptrs, tmp_path, leer=leer)
+    assert inf == {"con_texto": 1, "sin_texto": 1, "sin_pdf": 1} and len(filas) == 5
+    import datetime as dt
+    assert {f["presentado"] for f in filas} == {dt.date(2016, 11, 15)} and filas[0]["congresista"] == "Brooks, Mo (AL05)"
+    c = C.compras(filas)
+    assert [x["ticker"] for x in c] == ["T", "FOXA"]                         # ni ventas ni la opción [OP]
