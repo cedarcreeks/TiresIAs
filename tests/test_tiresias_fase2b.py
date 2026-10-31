@@ -2,6 +2,7 @@
 import datetime as dt
 
 import pandas as pd
+import pytest
 
 from tiresias import fase2b as F
 from tiresias import gestores as G
@@ -170,3 +171,21 @@ def test_contraste_con_los_corporate_actions():
         "cash_mergers": [{"acquiree_cusip": "A", "acquiree_symbol": "BRKB", "effective_date": "2016-04-01"}]}
     r = F.contraste_ca(acc, simb)
     assert r["comparados"] == 4 and r["coinciden"] == 3 and r["discrepan"] == {"C": [(D(2016, 3, 1), "Y", "X")]}
+
+
+def test_mensual_yahoo_usa_el_ajustado_y_quita_el_primer_mes(tmp_path):
+    import json
+    ts = [int(pd.Timestamp(x, tz="UTC").timestamp()) for x in ("2020-01-30", "2020-01-31", "2020-02-28", "2020-03-31")]
+    d = {"chart": {"result": [{"timestamp": ts, "indicators": {"quote": [{"close": [1, 1, 1, 1]}],
+                                                              "adjclose": [{"adjclose": [99.0, 100.0, 110.0, None]}]}}]}}
+    (tmp_path / "x.json").write_text(json.dumps(d))
+    m = F.mensual_yahoo(tmp_path / "x.json")
+    assert list(m.index) == [pd.Timestamp("2020-02-29")] and m.iloc[0] == pytest.approx(0.10)   # marzo, sin cierre
+
+
+def test_resumen_de_un_juicio_que_para_no_trae_metricas():
+    j = {"parada": {"para": True, "trimestres": 4, "bajos": 2,
+                    "por_trimestre": pd.Series([0.9, 0.5], index=pd.PeriodIndex(["2016Q1", "2016Q2"], freq="Q"))}}
+    r = F.resumen_juicio(j, pd.DataFrame({"RF": []}), pd.Series(dtype=float))
+    assert r["parada"] == {"para": True, "trimestres": 4, "bajos": 2} and "veredicto" not in r
+    assert r["cobertura_por_trimestre"] == {"2016Q1": 0.9, "2016Q2": 0.5}

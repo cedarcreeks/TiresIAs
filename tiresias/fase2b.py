@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import pathlib
 
 import pandas as pd
 
@@ -83,7 +84,6 @@ def preparar(crudo, derivado, fin_datos: dt.date) -> dict:
     """FTD y 13F de `crudo/archivo_sec/{ftd,13f}` (y `crudo/sec_directo`, si trae alguno que falte) a `derivado/`:
     `ftd.parquet`, `13f/*.parquet`, `cobertura_traduccion.csv` y `pedido_1.json`. Devuelve un resumen."""
     import json
-    import pathlib
     from tiresias import ingesta_2b as I
     from tiresias import precios as P
     crudo, derivado = pathlib.Path(crudo), pathlib.Path(derivado)
@@ -280,3 +280,87 @@ def contraste_ca(acciones: dict, simb: dict) -> dict:
             else:
                 discrepan.setdefault(c, []).append((f, s, regs[i][1]))
     return {"comparados": comparados, "coinciden": coinciden, "discrepan": discrepan}
+
+
+# ── 8. el ejecutor: del disco al veredicto, con robusteces y comparaciones ────
+def mensual_yahoo(ruta) -> pd.Series:
+    """Rentabilidad mensual (fin de mes) del cierre ajustado de un chart v8 de Yahoo, sin el primer mes."""
+    import json
+    r = json.loads(pathlib.Path(ruta).read_text())["chart"]["result"][0]
+    serie = r["indicators"].get("adjclose", [{}])[0].get("adjclose") or r["indicators"]["quote"][0]["close"]
+    s = pd.Series(serie, index=pd.to_datetime(r["timestamp"], unit="s").normalize(), dtype=float).dropna()
+    m = s.resample("ME").last()
+    return (m / m.shift(1) - 1).iloc[1:]
+
+
+def resumen_juicio(j: dict, F: pd.DataFrame, sp_exceso: pd.Series) -> dict:
+    """Lo que se publica de un juicio: la parada y, si no para, las métricas, el placebo y el veredicto."""
+    out = {"parada": {k: v for k, v in j["parada"].items() if k != "por_trimestre"},
+           "cobertura_por_trimestre": {str(k): float(v) for k, v in j["parada"]["por_trimestre"].items()}}
+    if "veredicto" not in j:
+        return out
+    rf = F["RF"]
+    idx = j["receta"].index.intersection(sp_exceso.index)
+    out.update({
+        "meses": [str(idx.min().date()), str(idx.max().date()), int(len(idx))],
+        "receta": G.metricas(j["receta"].loc[idx], rf), "sp500": G.metricas(sp_exceso.loc[idx], rf),
+        "todos": G.metricas(j["todos"].loc[idx], rf),
+        "placebo_p95": float(pd.Series(j["placebo"]).quantile(0.95)),
+        "placebo_mediana": float(pd.Series(j["placebo"]).median()),
+        "elegidos_por_decision": [len(G.elegir_decil(info)) for _, info in j["decisiones"]],
+        "veredicto": j["veredicto"]})
+    return out
+
+
+def ejecutar(derivado, pasadas: list, crudo, fin_datos: dt.date, reps: int = G.REPS_PLACEBO) -> dict:
+    """El juicio de 2B y sus robusteces, de los datos en disco. Si faltan precios, {"falta": pedido}."""
+    from tiresias import buffett as B
+    from tiresias import ingesta_2b as I
+    derivado, crudo = pathlib.Path(derivado), pathlib.Path(crudo)
+    ftd = pd.read_parquet(derivado / "ftd.parquet")
+    pos = I.posiciones(sorted((derivado / "13f").glob("*.parquet")))
+    r = rentabilidades_por_cusip(pos, ftd, pasadas, fin_datos)
+    if "falta" in r:
+        return r
+    F = B.cargar(crudo)[G.SEIS + ["RF"]]
+    sp = mensual_yahoo(crudo / "SP500TR_1d.json")
+    sp_ex = (sp - F["RF"].reindex(sp.index)).dropna()
+    out = {"estado_traduccion": pd.Series(r["estado"]).value_counts().to_dict(),
+           "caminos_precio": pd.Series(r["caminos"]).value_counts().to_dict(),
+           "contraste_ca": {"comparados": r["contraste_ca"]["comparados"], "coinciden": r["contraste_ca"]["coinciden"],
+                            "cusips_que_discrepan": len(r["contraste_ca"]["discrepan"])}}
+    principal = juicio(pos, r["rent"], F, sp_ex, reps=reps)
+    out["principal"] = resumen_juicio(principal, F, sp_ex)
+    for cob in (0.80, 0.95):
+        out[f"cobertura_{int(cob * 100)}"] = resumen_juicio(juicio(pos, r["rent"], F, sp_ex, cobertura_min=cob,
+                                                                   reps=reps), F, sp_ex)
+    pes = rentabilidades_por_cusip(pos, ftd, pasadas, fin_datos, pesimista=True)
+    out["salida_pesimista"] = resumen_juicio(juicio(pos, pes["rent"], F, sp_ex, reps=reps), F, sp_ex)
+    if "decisiones" in principal:
+        rf = F["RF"]
+        copia = G.copiar_posiciones(pos, r["rent"], principal["decisiones"], G.elegir_decil)
+        copia_ex = (copia - rf.reindex(copia.index)).dropna()
+        guru = mensual_yahoo(crudo / "GURU_1d.json")
+        guru_ex = (guru - rf.reindex(guru.index)).dropna()
+        idx = principal["receta"].index
+        out["comparaciones"] = {"copiar_posiciones": G.metricas(copia_ex.loc[copia_ex.index.intersection(idx)], rf),
+                                "etf_guru": G.metricas(guru_ex.loc[guru_ex.index.intersection(idx)], rf)}
+    return out
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    raiz = pathlib.Path.home() / "tiresias_datos/fase2"
+    if sys.argv[1:2] == ["juicio"]:
+        pasadas = [pathlib.Path(p) for p in sys.argv[2:]]
+        r = ejecutar(raiz / "derivado", pasadas, raiz / "crudo", dt.date(2026, 10, 30))
+        if "falta" in r:
+            siguiente = raiz / "derivado" / f"pedido_{len(pasadas) + 1}.json"
+            siguiente.write_text(json.dumps(r["falta"], default=str))
+            print(f"faltan precios: {siguiente} ({len(r['falta']['barras'])} lotes)")
+        else:
+            destino = pathlib.Path.home() / "tiresias_resultados/fase2/2b.json"
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            destino.write_text(json.dumps(r, indent=1, default=str))
+            print(json.dumps(r.get("principal", {}).get("veredicto", r.get("principal")), indent=1, default=str))
