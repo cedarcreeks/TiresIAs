@@ -193,7 +193,8 @@ def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
             fin = min(fin, ini + pd.offsets.MonthEnd(MESES_MAX))
             i0 = meses.searchsorted(ini)
             if i0 >= len(meses) or meses[i0] != ini:          # su primer mes no está en los precios
-                cobertura.append({"cik": cik, "presentado": p, "cobertura": 0.0, "n": 0, "entra": False})
+                cobertura.append({"cik": cik, "presentado": p, "cobertura": 0.0, "n": 0, "entra": False,
+                                  "valor": float(h["valor"].sum())})
                 continue
             idx = [cols.get(c) for c in h["cusip"]]
             con_precio = np.array([j is not None and not np.isnan(R[i0, j]) for j in idx], dtype=bool)
@@ -201,7 +202,8 @@ def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
             cob = float(v[con_precio].sum() / v.sum()) if v.sum() > 0 else 0.0
             n = int(con_precio.sum())
             entra = cob >= COBERTURA_MIN and n >= POSICIONES_MIN
-            cobertura.append({"cik": cik, "presentado": p, "cobertura": cob, "n": n, "entra": entra})
+            cobertura.append({"cik": cik, "presentado": p, "cobertura": cob, "n": n, "entra": entra,
+                              "valor": float(v.sum())})
             if not entra:
                 continue
             js = np.array([j for j, ok in zip(idx, con_precio) if ok])
@@ -220,6 +222,22 @@ def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
     else:
         r_gestores = pd.DataFrame(index=pd.DatetimeIndex([], name="mes"))
     return r_gestores, pd.DataFrame(cobertura)
+
+
+PARADA_COBERTURA, PARADA_FRACCION = 0.85, 0.25
+
+
+def parada(cobertura: pd.DataFrame) -> dict:
+    """La regla de parada de 2B: la cobertura agregada del valor (todos los 13F originales del trimestre de
+    presentación, ponderados por su valor) por debajo de `PARADA_COBERTURA` en más de `PARADA_FRACCION` de los
+    trimestres. Devuelve {"para", "trimestres", "bajos", "por_trimestre"}."""
+    c = cobertura.assign(trimestre=pd.to_datetime(cobertura["presentado"]).dt.to_period("Q"),
+                         con=cobertura["cobertura"] * cobertura["valor"])
+    g = c.groupby("trimestre")[["con", "valor"]].sum()
+    agregada = g["con"] / g["valor"]
+    bajos = int((agregada < PARADA_COBERTURA).sum())
+    return {"para": bajos > PARADA_FRACCION * len(agregada), "trimestres": int(len(agregada)), "bajos": bajos,
+            "por_trimestre": agregada}
 
 
 # ── 5. la selección, la receta y el veredicto ─────────────────────────────

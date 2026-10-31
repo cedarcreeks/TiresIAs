@@ -218,3 +218,17 @@ def test_veredicto_pasa_solo_con_las_cuatro():
     mala_mitad = buena.copy()
     mala_mitad.iloc[48:] = sp.iloc[48:] - 0.002
     assert not G.veredicto(mala_mitad, sp, sp, [0.1] * 200, rf)["criterios"]["2_en_las_dos_mitades"]
+
+
+def test_la_regla_de_parada_pondera_por_valor_y_cuenta_trimestres():
+    def cob(filas):
+        return pd.DataFrame(filas, columns=["presentado", "cobertura", "valor"])
+    # 4 trimestres; el segundo, 0,80 ponderado (0,95 de 1 y 0,79 de 9 → 0,806): uno de cuatro no para
+    base = [("2016-02-14", 0.95, 1.0), ("2016-02-15", 0.95, 1.0), ("2016-05-14", 0.95, 1.0), ("2016-05-15", 0.79, 9.0),
+            ("2016-08-14", 0.95, 1.0), ("2016-11-14", 0.95, 1.0)]
+    r = G.parada(cob(base))
+    assert r["trimestres"] == 4 and r["bajos"] == 1 and not r["para"]
+    assert r["por_trimestre"].iloc[1] == pytest.approx((0.95 + 0.79 * 9) / 10)
+    # sin ponderar, el segundo saldría 0,87 y no contaría: con dos bajos de cuatro, para
+    r = G.parada(cob(base + [("2016-08-15", 0.10, 5.0)]))
+    assert r["bajos"] == 2 and r["para"]
