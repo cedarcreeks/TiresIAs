@@ -264,9 +264,19 @@ def decisiones(r_gestores: pd.DataFrame, F: pd.DataFrame, desde: str) -> list:
     return out
 
 
+def pesos(p: dict) -> np.ndarray:
+    """La estrategia de 2A′ con parámetros `p` como pesos sobre `SEIS`: beta·MKT + escala·Σ cargas·factor es lineal, así
+    que MKT pesa beta + escala·c_MKT y cada otro factor, escala·c_f."""
+    w = np.array([p["escala"] * p["cargas"][f] for f in SEIS], dtype=float)
+    w[SEIS.index("MKT")] += p["beta"]
+    return w
+
+
 def receta(decs: list, F: pd.DataFrame, elegir) -> pd.Series:
     """El exceso mensual de la receta: en cada decisión, `elegir(info) -> [cik]`; los tres meses siguientes, la media de
-    la estrategia de 2A′ de cada elegido con sus parámetros congelados en su ventana."""
+    la estrategia de 2A′ de cada elegido con sus parámetros congelados en su ventana. Por ser lineal, la media de las
+    estrategias es la estrategia de los pesos medios (`pesos`): lo mismo que aplicarlas una a una (test de
+    equivalencia), y de 4,7 s a 0,03 s por receta con 4.000 gestores (medido), que es lo que hace viable el placebo."""
     filas = {}
     for k, (d, info) in enumerate(decs):
         elegidos = elegir(info)
@@ -275,10 +285,10 @@ def receta(decs: list, F: pd.DataFrame, elegir) -> pd.Series:
         siguientes = F.loc[d:].iloc[1:4]
         if k + 1 < len(decs):
             siguientes = siguientes.loc[:decs[k + 1][0]]
-        for m in siguientes.index:
-            fila = siguientes.loc[[m]]
-            filas[m] = float(np.mean([B.aplicar_estilo(fila, info[c]["p"]).iloc[0] for c in elegidos]))
-    return pd.Series(filas).sort_index()
+        w = np.mean([pesos(info[c]["p"]) for c in elegidos], axis=0)
+        for m, x in zip(siguientes.index, siguientes[SEIS].to_numpy() @ w):
+            filas[m] = float(x)
+    return pd.Series(filas, dtype=float).sort_index()
 
 
 def elegir_decil(info: dict) -> list:

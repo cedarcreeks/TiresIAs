@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from tiresias import buffett as B
 from tiresias import gestores as G
 
 SUB = ("ACCESSION_NUMBER\tFILING_DATE\tSUBMISSIONTYPE\tCIK\tPERIODOFREPORT\n"
@@ -232,3 +233,24 @@ def test_la_regla_de_parada_pondera_por_valor_y_cuenta_trimestres():
     # sin ponderar, el segundo saldría 0,87 y no contaría: con dos bajos de cuatro, para
     r = G.parada(cob(base + [("2016-08-15", 0.10, 5.0)]))
     assert r["bajos"] == 2 and r["para"]
+
+
+def test_la_receta_con_pesos_medios_es_la_media_de_las_estrategias():
+    """La referencia es el cálculo de antes: aplicar la estrategia de cada elegido y promediar."""
+    rng = np.random.default_rng(3)
+    idx = pd.date_range("2016-01-31", periods=40, freq="ME")
+    F = pd.DataFrame(rng.normal(0.005, 0.03, (40, 6)), index=idx, columns=G.SEIS)
+    F["RF"] = 0.001
+    p = lambda: {"beta": rng.normal(1, .2), "cargas": {f: rng.normal(0, .3) for f in G.SEIS},
+                 "escala": abs(rng.normal(1, .3)), "sigma_idio": .02}
+    decs = [(d, {str(c): {"t": rng.normal(), "p": p()} for c in range(30)}) for d in idx[5::3][:8]]
+    r = G.receta(decs, F, G.elegir_todos)
+    ref = {}
+    for k, (d, info) in enumerate(decs):
+        sig = F.loc[d:].iloc[1:4]
+        if k + 1 < len(decs):
+            sig = sig.loc[:decs[k + 1][0]]
+        for m in sig.index:
+            ref[m] = np.mean([B.aplicar_estilo(sig.loc[[m]], info[c]["p"]).iloc[0] for c in info])
+    ref = pd.Series(ref).sort_index()
+    assert list(r.index) == list(ref.index) and np.allclose(r.to_numpy(), ref.to_numpy(), rtol=0, atol=1e-14)
