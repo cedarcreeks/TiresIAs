@@ -123,3 +123,53 @@ def veredicto(neta_ex: pd.Series, bruta_ex: pd.Series, sp_ex: pd.Series, F: pd.D
             "placebo_mediana": float(np.median(placebo)) if placebo else None,
             "placebo_p95": float(np.percentile(placebo, 95)) if placebo else None,
             "criterios": crit, "cumplidos": int(sum(crit.values())), "pasa": all(crit.values())}
+
+
+def ejecutar(raiz, pasadas: list, reps: int = 200) -> dict:
+    """El juicio de 2D de los datos en disco: la definición principal («market») y la robustez («portfolio»)."""
+    import datetime as dt
+    import pathlib
+    from tiresias import fase2b as F2, ingesta_2b as I
+    raiz = pathlib.Path(raiz)
+    cache = raiz / "derivado/rent_cusip.parquet"
+    pos = I.posiciones(sorted((raiz / "derivado/13f").glob("*.parquet")))[["cik", "periodo", "presentado", "cusip", "valor"]]
+    if cache.exists():
+        rent = pd.read_parquet(cache)
+    else:
+        r = F2.rentabilidades_por_cusip(pos, pd.read_parquet(raiz / "derivado/ftd.parquet"), pasadas, dt.date(2026, 10, 30))
+        rent = r["rent"]
+        rent.to_parquet(cache)
+    F = B.cargar(raiz / "crudo")
+    sp = F2.mensual_yahoo(raiz / "crudo/SP500TR_1d.json")
+    rf = F["RF"]
+    out = {}
+    for modo in ("market", "portfolio"):
+        cand = candidatas(pos, rent, modo)
+        real = activos(ideas(pos, rent, modo, cand=cand))
+        bruta, coste = cartera(real, rent)
+        idx = bruta.index.intersection(rf.index)
+        bruta_ex, neta_ex = bruta.loc[idx] - rf.loc[idx], (bruta - coste).loc[idx] - rf.loc[idx]
+        plac = []
+        for s in range(reps):
+            b, c = cartera(activos(ideas(pos, rent, modo, semilla=s, cand=cand)), rent)
+            i2 = b.index.intersection(rf.index)
+            plac.append(G.metricas((b - c).loc[i2] - rf.loc[i2], rf)["sharpe"])
+        v = veredicto(neta_ex, bruta_ex, (sp - rf.reindex(sp.index)).dropna(), F, plac)
+        out[modo] = {"ideas": int(len(real)), "gestores": int(real["cik"].nunique()),
+                     "meses": [str(idx.min().date()), str(idx.max().date()), int(len(idx))],
+                     "bruta": G.metricas(bruta_ex, rf), "coste_anual_medio": float(coste.loc[idx].mean() * 12), **v}
+    return out
+
+
+if __name__ == "__main__":
+    import json
+    import pathlib
+    import sys
+    casa = pathlib.Path.home()
+    r = ejecutar(casa / "tiresias_datos/fase2", [pathlib.Path(x) for x in sys.argv[1:]])
+    destino = casa / "tiresias_resultados/fase2/2d.json"
+    destino.write_text(json.dumps(r, indent=1, default=str))
+    for modo, x in r.items():
+        print(modo, json.dumps({k: x[k] for k in ("ideas", "gestores", "meses", "alfa", "bruta", "neta", "sp500",
+                                                  "coste_anual_medio", "placebo_mediana", "placebo_p95", "criterios",
+                                                  "cumplidos")}, default=str))
