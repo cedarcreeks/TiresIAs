@@ -107,3 +107,67 @@ def preparar(crudo, derivado, fin_datos: dt.date) -> dict:
             "gestores": int(pos["cik"].nunique()), "cusips": len(v), "cusips_con_tramos": len(por_cusip),
             "simbolos": len(rangos), "lotes_barras": len(ped["barras"]), "lotes_acciones": len(ped["acciones"]),
             "cobertura_min": float(cob["cobertura"].min()), "cobertura_mediana": float(cob["cobertura"].median())}
+
+
+# ── 5. la revisión de una pasada: contraste con el FTD y lo que falta pedir ───
+def _dentro(serie: dict, ini: dt.date, fin: dt.date) -> dict:
+    return {f: x for f, x in serie.items() if ini <= f <= fin}
+
+
+def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: dict, rangos_pedidos: dict) -> dict:
+    """Tras una pasada de la descarga: los tramos definitivos de cada CUSIP y lo que queda por pedir.
+
+    1. Los tramos se recortan con los cambios de nombre de los corporate actions (el día exacto del cambio).
+    2. Cada tramo se contrasta con el precio de sus registros FTD (`precios.contraste_ftd`): vale con mediana de |Δ|
+       ≤ `CONTRASTE_MAX`. Si no cuadra, o el símbolo no tiene barras, se prueba la forma con punto (BRKB → BRK.B) si
+       ya está bajada, y si no se pide. Un tramo sin registros con precio queda «sin contraste».
+    3. Se piden también los símbolos o rangos nuevos que traen los cambios de nombre y los cierres de lo escindido y
+       de los compradores en su fecha (`cierres_ajenos` de `precios.rentabilidades`).
+
+    Devuelve {"tramos": {cusip: [(símbolo, ini, fin)]}, "estado": {cusip: estado}, "rangos_pendientes": {símbolo:
+    (desde, hasta)}, "ajenos": {(símbolo, fecha)}}; estado es «ok», «sin contraste», «pendiente» o «no cuadra»."""
+    from tiresias import precios as P
+    tramos, estado, pendientes, ajenos = {}, {}, {}, set()
+    def pedido_cubre(s, i, f):
+        a, b = rangos_pedidos.get(s, (None, None))
+        return a is not None and a <= i and f <= b
+    def pedir(s, i, f):
+        x, y = pendientes.get(s, (i, f))
+        pendientes[s] = (min(x, i), max(y, f))
+    def juzgar(s, regs, i, f):
+        """«ok», «sin contraste», «sin datos» (pedido y vacío), «no cuadra» o «pendiente» (sin pedir aún)."""
+        if not pedido_cubre(s, i - MARGEN, f):
+            pedir(s, i - MARGEN, f)
+            return "pendiente"
+        serie = _dentro(tal_cual.get(s, {}), i - MARGEN, f)
+        if not serie:
+            return "sin datos"
+        n, med = P.contraste_ftd(regs, serie)
+        return "sin contraste" if not n else ("ok" if med <= P.CONTRASTE_MAX else "no cuadra")
+    for c, (desde, hasta) in ventanas_c.items():
+        acc_c = P.acciones_de(c, acciones)
+        ts = P.tramos(simb.get(c, []), desde, hasta, P.cambios_de_nombre(acc_c))
+        if not ts:
+            continue
+        finales, estados = [], []
+        for s, i, f in ts:
+            regs = [(d, p) for d, p in prec.get(c, []) if i <= d <= f]
+            elegido, e = s, juzgar(s, regs, i, f)
+            if e in ("sin datos", "no cuadra"):
+                punto = P.forma_con_punto(s)
+                e2 = juzgar(punto, regs, i, f) if punto else "no cuadra"
+                # la forma con punto sólo vale contrastada (BRKL no es BRK.L)
+                if e2 == "ok":
+                    elegido, e = punto, "ok"
+                else:
+                    e = "pendiente" if e2 == "pendiente" else "no cuadra"
+            finales.append((elegido, i, f))
+            estados.append(e)
+        tramos[c] = finales
+        estado[c] = next((x for x in ("no cuadra", "pendiente", "sin contraste") if x in estados), "ok")
+        for d in P.acciones_de(c, acciones, finales).get("spin_offs", []):
+            ajenos.add((d["new_symbol"], dt.date.fromisoformat(d["ex_date"])))
+        for k in ("stock_mergers", "stock_and_cash_mergers"):
+            for d in P.acciones_de(c, acciones, finales).get(k, []):
+                ajenos.add((d["acquirer_symbol"], dt.date.fromisoformat(d["effective_date"])))
+    return {"tramos": tramos, "estado": estado, "rangos_pendientes": pendientes, "ajenos": ajenos}
