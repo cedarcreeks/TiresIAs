@@ -76,3 +76,16 @@ def test_el_temporal_es_de_cada_proceso(tmp_path, monkeypatch):
     X._escribir(parte, "hola")
     assert vistos == [f"barras_x_all.jsonl.gz.{os.getpid()}.tmp"]
     assert real(parte, "rt").read() == "hola" and ajeno.read_bytes() == b"a medias"
+
+
+def test_las_series_compactas_dan_lo_mismo_que_leer_barras_y_manda_la_ultima_pasada(tmp_path):
+    datos = {"A": {D(2016, 1, 4): (10.0, 5), D(2016, 1, 5): (11.0, 0)}, "B": {D(2016, 1, 4): (20.0, 7)}}
+    p1, p2 = tmp_path / "p1", tmp_path / "p2"
+    X.ejecutar(PEDIDO, p1, _Alpaca(datos))
+    s = X.leer_series([p1], "all")
+    assert dict((k, s[k]) for k in s) == X.leer_barras(p1, "all") and "A" in s and "Z" not in s and len(s) == 2
+    X.ejecutar(PEDIDO, p2, _Alpaca({"A": {D(2016, 1, 5): (12.0, 9)}}))                  # la pasada 2 corrige un día
+    s2 = X.leer_series([p1, p2], "all")
+    assert s2["A"] == {D(2016, 1, 4): (10.0, 5), D(2016, 1, 5): (12.0, 9)} and s2.get("Z", {}) == {}
+    assert (p1 / "_all.parquet").exists()
+    assert X.leer_series([p1], "all")["B"] == {D(2016, 1, 4): (20.0, 7)}                # desde la caché

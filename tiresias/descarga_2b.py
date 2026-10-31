@@ -115,3 +115,74 @@ if __name__ == "__main__":
     r = ejecutar(pedido, destino, a)
     print(f"{a.peticiones} peticiones; partes hechas {r['hechas']}, ya estaban {r['saltadas']}; "
           f"sin datos ni pedidos solos: {len(r['sin_datos'])}; inválidos para Alpaca: {sorted(set(a.invalidos))}")
+
+
+# ── series compactas: 75 M de barras no caben como diccionarios de Python ─────
+from collections.abc import Mapping  # noqa: E402
+
+
+class SeriesCompactas(Mapping):
+    """{símbolo: {fecha: (cierre, volumen)}} como `leer_barras`, pero guardado en columnas (fecha ordinal, cierre,
+    volumen): ~20 B por barra en vez de ~200. Cada símbolo se convierte al formato de diccionario sólo cuando se pide."""
+
+    def __init__(self, tabla):
+        import numpy as np
+        t = tabla.sort_values(["s", "d"], kind="stable").reset_index(drop=True)
+        self._d = t["d"].to_numpy(dtype=np.int32)
+        self._c = t["c"].to_numpy(dtype=np.float64)
+        self._v = t["v"].to_numpy(dtype=np.int64)
+        s = t["s"].to_numpy()
+        cortes = np.flatnonzero(s[1:] != s[:-1]) + 1 if len(s) else np.array([], dtype=int)
+        ini = np.concatenate([[0], cortes]) if len(s) else np.array([], dtype=int)
+        fin = np.concatenate([cortes, [len(s)]]) if len(s) else np.array([], dtype=int)
+        self._idx = {s[i]: (int(i), int(j)) for i, j in zip(ini, fin)}
+
+    def __getitem__(self, simbolo):
+        import datetime as dt
+        i, j = self._idx[simbolo]
+        return {dt.date.fromordinal(int(d)): (float(c), int(v))
+                for d, c, v in zip(self._d[i:j], self._c[i:j], self._v[i:j])}
+
+    def __contains__(self, simbolo):
+        return simbolo in self._idx
+
+    def __iter__(self):
+        return iter(self._idx)
+
+    def __len__(self):
+        return len(self._idx)
+
+
+def tabla_de_partes(destino: pathlib.Path, modo: str):
+    """Todas las partes de un modo en una tabla (s, d, c, v), con caché en `_<modo>.parquet` que se rehace si cambian
+    las partes (nombre y tamaño)."""
+    import datetime as dt
+    import pandas as pd
+    partes = sorted(destino.glob(f"barras_*_{modo}.jsonl.gz"))
+    firma = json.dumps([(p.name, p.stat().st_size) for p in partes])
+    cache, firma_f = destino / f"_{modo}.parquet", destino / f"_{modo}.firma"
+    if cache.exists() and firma_f.exists() and firma_f.read_text() == firma:
+        return pd.read_parquet(cache)
+    trozos = []
+    for p in partes:
+        if p.stat().st_size > 20:
+            t = pd.read_json(p, lines=True, compression="gzip", dtype={"s": str, "f": str})
+            if len(t):
+                trozos.append(t)
+    if trozos:
+        t = pd.concat(trozos, ignore_index=True)
+        t["d"] = pd.to_datetime(t["f"]).map(dt.date.toordinal).astype("int32")
+        t = t[["s", "d", "c", "v"]]
+    else:
+        t = pd.DataFrame({"s": pd.Series(dtype=str), "d": pd.Series(dtype="int32"),
+                          "c": pd.Series(dtype=float), "v": pd.Series(dtype="int64")})
+    t.to_parquet(cache, index=False)
+    firma_f.write_text(firma)
+    return t
+
+
+def leer_series(destinos: list, modo: str) -> SeriesCompactas:
+    """Las barras de un modo de varias pasadas; si una fecha de un símbolo está en dos, manda la pasada posterior."""
+    import pandas as pd
+    t = pd.concat([tabla_de_partes(d, modo) for d in destinos], ignore_index=True)
+    return SeriesCompactas(t.drop_duplicates(["s", "d"], keep="last"))

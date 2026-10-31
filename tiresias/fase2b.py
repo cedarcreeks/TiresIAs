@@ -183,12 +183,10 @@ def juntar_pasadas(dirs: list) -> tuple:
     (desde, hasta)}) de una o varias pasadas de `descarga_2b` (cada una con su `pedido.json`)."""
     import json
     from tiresias import descarga_2b as X
-    series = {m: {} for m in ("all", "raw", "tal_cual")}
+    # en columnas (`SeriesCompactas`): 75 M de barras como diccionarios de Python no caben en 17 GB
+    series = {m: X.leer_series(list(dirs), m) for m in ("all", "raw", "tal_cual")}
     acciones, vistos, rangos = {}, set(), {}
     for d in dirs:
-        for m in series:
-            for s, x in X.leer_barras(d, m).items():
-                series[m].setdefault(s, {}).update(x)
         for k, v in X.leer_acciones(d).items():
             for r in v:
                 if r.get("id") not in vistos:
