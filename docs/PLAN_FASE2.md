@@ -133,6 +133,53 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
   de un trimestre de cada cuatro, 2B se para**: el sesgo de supervivencia sería demasiado grande para medir nada.
 - **Referencia**: el S&P 500 con dividendos (`^SP500TR`); factores y tipo libre, los de 2A.
 
+## 2D · Las mejores ideas, veinte años después (fijado el 1-nov-2026, antes de calcularlo)
+
+**La pregunta.** [Cohen, Polk y Silli](https://www.fmg.ac.uk/sites/default/files/publications/DP624.pdf) (LSE FMG
+DP624) encontraron que la «mejor idea» de cada gestor de fondos de EE. UU. bate al mercado: de 1991 a 2005, 126 pb al
+mes sobre el tipo libre y un alfa de cuatro factores de 29 pb al mes (t 2,24), con su definición más sencilla. ¿Sigue
+funcionando fuera de su muestra (2016–2026), con los 13F públicos, en la fecha en que se publican y con costes?
+
+**Lo que ya se vio y contamina.** En 2B, como comparación sin criterio, copiar las cinco mayores posiciones de los
+gestores del decil superior por alfa dio Sharpe 0,89 frente a 0,83 del S&P 500. La definición de aquí es otra (la de
+los autores: el mayor *tilt*, de todos los gestores activos) y no se ha calculado.
+
+**El método, el de los autores** (sección 3 y apartado 4.2 del artículo):
+
+- La mejor idea de cada gestor es el valor con mayor *tilt*: su peso en la cartera menos su peso en el mercado
+  (`market_tilt`, su definición principal). Como robustez, el *tilt* frente a la cartera del propio gestor ponderada
+  por capitalización (`portfolio_tilt`).
+- Sólo el 25 % de gestores con mayor *tilt* en su mejor idea, para dejar fuera a los casi indexados. Carteras con al
+  menos 20 valores.
+- La cartera de mejores ideas, a partes iguales (si dos gestores comparten idea, pesa doble).
+
+**Lo que cambia, porque los datos obligan:**
+
+- **13F, no fondos de inversión.** Entran también bancos, aseguradoras y asesores. El filtro del 25 % de mayor
+  *tilt* hace de filtro de gestión activa.
+- **Peso en el mercado = el peso en la suma de todos los 13F del mismo periodo**, porque no hay capitalización
+  bursátil en los datos. Las instituciones con 13F tienen la mayor parte del mercado de EE. UU.
+- **Fecha pública, no la de la cartera.** Entra en el primer mes completo tras presentarse el 13F y dura hasta la
+  siguiente, como mucho cuatro meses (el calendario de 2B). Los autores usan la fecha de la cartera, y dicen que la
+  versión con la fecha pública también daba beneficios, sin mostrarla.
+- **Coste**: 0,1 % por cada lado de cada operación, sobre la rotación mensual de la cartera.
+- **Fuera**, por ahora, las dos variantes ponderadas por riesgo idiosincrático, que exigen varianzas diarias por
+  valor.
+
+**Periodo**: de 2016-03 a 2026-08, con los precios por CUSIP de 2B.
+
+**Pasa sólo si se cumplen las tres:**
+
+1. **La anomalía sigue viva**: alfa de cuatro factores (MKT, SMB, HML, UMD, de Ken French) positivo con t ≥ 2,
+   bruto de costes (la medida de los autores).
+2. **Se puede ganar con ella**: neta de costes, Sharpe +0,10 y CAGR +1 pp frente al S&P 500 con dividendos, en el
+   total y en cada mitad.
+3. **No es azar**: por encima del p95 de un placebo, con un valor al azar de cada gestor en vez de su mejor idea, 200
+   veces.
+
+Si (1) se cumple y (2) no, la anomalía vive pero no paga a un particular: se dice así. Si pasan las tres, va a una
+incubadora en sombra, nunca directamente al dinero.
+
 ## 2C · Hecha con lo que se puede comprar
 
 Sólo si 2B pasa: la receta con ETF de factores sólo a largo (calidad, mínima volatilidad, valor, momentum, tamaño) y el
