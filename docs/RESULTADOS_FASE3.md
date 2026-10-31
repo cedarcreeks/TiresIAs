@@ -1,4 +1,4 @@
-# TiresIAs · Fase 3 · Resultados (en curso)
+# TiresIAs · Fase 3 · Resultados
 
 Plan y criterios: [PLAN_FASE3.md](PLAN_FASE3.md), fijados antes de bajar los datos.
 
@@ -36,7 +36,50 @@ ganadores sigan ganando. **Lo que se lleva quien lo lea: no seguir a los primero
   punto anterior más cercano.
 - Las cuentas que se arruinaron y se fueron pueden faltar de la clasificación.
 
-## 3C · Congresistas uno a uno
+## 3C · Congresistas de la Cámara: NO (0 de 3) — elegir a quién copiar no aporta
 
-En curso: 6.989 declaraciones de operaciones de la Cámara (2016–2026) bajadas del Clerk; el analizador de los PDF y la
-cartera están escritos y probados. Faltan los precios y el juicio.
+**Datos.**
+
+- Las 6.989 declaraciones de operaciones de la Cámara de 2016 a 2026, del Clerk.
+- 5.298 son electrónicas; las 1.691 de papel escaneado (24 %) no se leen y quedan fuera.
+- De 51.761 operaciones, **17.305 son compras de acciones con símbolo**, de 205 congresistas en 2.191 símbolos.
+- Tienen precio 16.650, de 202 congresistas: 1.911 símbolos por el camino de Alpaca, 28 reconstruidos, 8 descartados
+  por el guardián y 244 sin datos.
+
+**Método** ([plan](PLAN_FASE3.md)):
+
+- cada compra entra al cierre del día de mercado siguiente a su presentación y se mantiene 182 días;
+- cada trimestre se copia al decil superior de congresistas por la rentabilidad de sus compras de los 24 meses
+  anteriores, sólo con tenencias ya acabadas, y con un mínimo de 5;
+- hay decisión en los 34 trimestres de 2018 a 2026, con 3 a 5 elegidos.
+
+Juicio de 2018-04 a 2026-08 (98 meses):
+
+| | Sharpe | CAGR |
+|---|---|---|
+| Copiar a los elegidos, ponderado por importe | 0,63 | 17,7 % |
+| Copiar a los elegidos, a partes iguales (robustez) | 0,38 | 9,9 % |
+| S&P 500 con dividendos | 0,76 | 14,8 % |
+| Placebo (congresistas al azar, 200 veces), mediana / p95 | 0,56 / 0,94 | — |
+| En los 39 meses comunes con NANC: la copia / NANC | 0,07 / 1,22 | — |
+
+| Criterio | |
+|---|---|
+| 1 · Sharpe +0,10 y CAGR +1 pp frente al S&P 500, en las dos mitades | **no** |
+| 2 · Por encima del p95 del placebo | **no** |
+| 3 · Por encima de NANC en el periodo común | **no** |
+
+Ponderada por importe, la copia ganó más que el S&P 500 (+2,9 pp al año), pero con mucho más riesgo: Sharpe 0,63
+frente a 0,76. Esa ganancia sale de unas pocas compras muy grandes y no se distingue de elegir congresistas al azar
+(cae dentro del placebo). A partes iguales, la ventaja desaparece. Y en 2023–2026 queda muy por debajo de NANC, que
+copia a todos los demócratas.
+
+**Lo que se lleva quien lo lea**: ni copiar a todos (NANC: alfa 0,0) ni elegir a los «mejores» congresistas por su
+historial bate al índice.
+
+**Dónde queda flojo.**
+
+- Sólo la Cámara: el Senado exige aceptar sus condiciones de uso.
+- La cuarta parte de las declaraciones, en papel, no se lee.
+- Con 3–5 elegidos por trimestre la cartera es muy concentrada.
+- La rentabilidad de las acciones de importes grandes pesa mucho al ponderar por el centro del tramo.

@@ -15,7 +15,7 @@ reported as prominently as positive ones.
 | 2A′ | Does Buffett's factor recipe still work after it was published? | **Partly** · ahead of the market in 2012–19, not in 2019–26 |
 | 2B | Does the recipe of the best 13F managers, picked without hindsight, beat the S&P 500? | **No** · 1 of 4 |
 | 3A | Do the Hyperliquid traders winning *now* keep winning? | **No** · 1 of 2 |
-| 3C | Does copying the right members of Congress beat the S&P 500? | Running |
+| 3C | Does copying the right members of Congress beat the S&P 500? | **No** · 0 of 3 |
 
 Results: [phase 1](docs/RESULTADOS_RONDA2.md) · [2A and 2A′](docs/RESULTADOS_FASE2A.md) · [2B](docs/RESULTADOS_FASE2B.md) · [3](docs/RESULTADOS_FASE3.md).
 Plans: [phase 2](docs/PLAN_FASE2.md) · [phase 3](docs/PLAN_FASE3.md). Documents are in Spanish.
@@ -33,7 +33,8 @@ Plans: [phase 2](docs/PLAN_FASE2.md) · [phase 3](docs/PLAN_FASE3.md). Documents
 - **Copying holdings has not paid.** The Global X Guru ETF, which copies hedge funds' 13F positions, returned 5.9 % a
   year against 10.8 % for the S&P 500 over ten years ([PortfoliosLab](https://portfolioslab.com/tools/stock-comparison/GURU/SPY)).
   NANC, the ETF that copies Democratic members of Congress, beat the S&P 500 from 2023 to 2026 only through extra
-  market exposure: beta 1.08, alpha 0.0 %.
+  market exposure (beta 1.08, alpha 0.0 %), and picking the members with the best record from 17,305 disclosed
+  purchases did no better than picking them at random.
 - **Free market data fails silently.** Alpaca's history API can return another company's prices for a reused ticker,
   splice two companies into one series, pad gaps with zero-volume bars and drop symbols from batch requests; the SEC
   regenerated its 13F datasets in 2024. Each trap, and the check that catches it, is in
