@@ -25,7 +25,8 @@ MODOS = {"all": ("all", None), "raw": ("raw", None), "tal_cual": ("raw", "-")}
 
 
 def _escribir(ruta: pathlib.Path, texto: str):
-    tmp = ruta.with_suffix(ruta.suffix + ".tmp")
+    # un temporal por proceso: con varios trabajando sobre el mismo destino, dos que bajen la misma parte no se pisan
+    tmp = ruta.with_suffix(ruta.suffix + f".{os.getpid()}.tmp")
     with gzip.open(tmp, "wt", encoding="utf-8") as f:
         f.write(texto)
     tmp.replace(ruta)                     # una parte a medias nunca queda con su nombre final

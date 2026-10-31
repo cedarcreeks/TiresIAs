@@ -1,5 +1,7 @@
 """Tests de tiresias.descarga_2b: partes reanudables, lo que se queda sin datos y la lectura de vuelta."""
 import datetime as dt
+import os
+import pathlib
 
 from tiresias import descarga_2b as X
 
@@ -60,3 +62,17 @@ def test_al_reanudar_lee_de_su_parte_que_simbolos_tienen_barras(tmp_path):
     a = _Alpaca({})
     X.ejecutar(PEDIDO, tmp_path, a)                                          # ya está tal_cual: sólo pide all
     assert a.pedidas[0] == ("barras", ("A", "B", "Z"), "all", None, ("A",))
+
+
+def test_el_temporal_es_de_cada_proceso(tmp_path, monkeypatch):
+    """Dos procesos sobre el mismo destino: el temporal lleva el pid, y el de otro que quedó a medias no estorba."""
+    import gzip
+    parte = tmp_path / "barras_x_all.jsonl.gz"
+    ajeno = tmp_path / "barras_x_all.jsonl.gz.99999.tmp"
+    ajeno.write_bytes(b"a medias")
+    vistos = []
+    real = gzip.open
+    monkeypatch.setattr(X.gzip, "open", lambda ruta, *a, **k: (vistos.append(pathlib.Path(ruta).name), real(ruta, *a, **k))[1])
+    X._escribir(parte, "hola")
+    assert vistos == [f"barras_x_all.jsonl.gz.{os.getpid()}.tmp"]
+    assert real(parte, "rt").read() == "hola" and ajeno.read_bytes() == b"a medias"
