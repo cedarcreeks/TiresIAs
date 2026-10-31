@@ -2,6 +2,45 @@
 
 Plan y criterios: [PLAN_FASE2.md](PLAN_FASE2.md), apartado 2B, fijados antes de bajar los datos.
 
+## Los datos: 13F y FTD (31-oct-2026)
+
+**De dónde vienen.** La SEC respondió 403 («Request Rate Threshold Exceeded») a los programas desde la IP de la casa
+durante toda la jornada, aunque a un navegador le cargaba. No se intentó esquivar. Los ficheros salieron de la copia
+del Internet Archive, que guarda los mismos zips con su URL original:
+
+- **13F**: 42 conjuntos, de 2016q1 a la ventana de mar–may-2026. No está la ventana de jun–ago-2026.
+- **FTD**: 246 de los 260 quincenales de dic-2015 a sep-2026. Los que faltan son abr–jun-2017, feb–abr-2020 y tres
+  quincenas de 2026; ningún hueco pasa de 3 meses y la traducción usa el registro anterior más cercano. Los de 2016–17
+  estaban en una ruta antigua (`sec.gov/foia/failsreports/`), que salió de una copia archivada de la página de la SEC.
+
+**Cómo se verificó.**
+
+- **Archivo**: cada fichero, contra el SHA-1 del índice del archivo y con el CRC de su zip; los 288, bien.
+- **SEC directa**: cuatro ficheros bajados de la SEC desde el navegador. Tres son idénticos byte a byte.
+  `2016q1_form13f.zip` no lo es, porque **la SEC regeneró los trimestrales el 15-feb-2024**: añadió la columna FIGI y 3
+  presentaciones de 4.184 (177 posiciones de 1.023.199). Las posiciones comunes coinciden todas en valor. Las 30 copias
+  trimestrales del archivo son de antes de esa regeneración; cuando hay copia de la SEC, manda la de la SEC.
+- **Lectura**: las filas de cada FTD cuadran con su recuento final en los 246 ficheros, porque la lectura falla si no.
+  Cada línea de las tablas de 13F tiene los campos de su cabecera.
+
+**Lo que queda**: 63,5 M de posiciones de 12.470 gestores en 77.925 CUSIP. Son sólo 13F-HR originales, acciones (`SH`)
+y sin opciones. Un 13F atrasado de un periodo anterior al último presentado no cuenta.
+
+**La traducción CUSIP → símbolo con fecha** cubre del 98,3 % al 99,9 % del valor de cada uno de los 42 trimestres. Es
+una cota superior: luego hace falta el precio.
+
+- **Contraste con el precio**: el `PRICE` de cada registro FTD es, según la SEC, el cierre del día anterior. Coincide
+  con el cierre sin ajustar de Alpaca, con mediana y p99 de |Δ| de 0,000 % en 13.529 registros de 27 valores conocidos.
+  Por eso cada tramo (CUSIP, símbolo) se da por bueno sólo si su mediana de |Δ| es ≤ 1 %.
+- **Clases**: el FTD las escribe sin punto (BRKB por BRK.B). La forma con punto sólo se toma si cuadra con el precio,
+  porque BRKL y BRKR son otras empresas.
+- **Avance** con 95 de los 590 lotes de la primera pasada: el 98,29 % del valor evaluable cuadra con su precio, el
+  1,71 % espera la forma con punto y ninguno «no cuadra».
+
+**Una hipótesis de la descarga, comprobada**: un lote con `asof=-` no se calla ningún símbolo. De 200 «sin datos»
+elegidos al azar y pedidos uno a uno, ninguno trajo barras. Por eso en los otros modos sólo se repiten solos los
+símbolos que sí tienen barras tal como cotizaron.
+
 ## Los precios: validación de `tiresias/precios.py` (31-oct-2026)
 
 Antes de bajar ningún precio de 2B se validó el módulo con 27 valores de 2016-01 a 2026-09: AAPL, EW, ISRG, NVDA, TSLA,
