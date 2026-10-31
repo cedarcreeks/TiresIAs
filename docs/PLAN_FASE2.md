@@ -81,8 +81,31 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
   cercano **anterior** a la fecha de presentación del 13F (y, si no lo hay, el primero posterior dentro de 90 días);
   **después**, OpenFIGI (la cotización compuesta de EE. UU.); **por último**, los inactivos de Alpaca por nombre
   normalizado del emisor, descartando una coincidencia ambigua. Se informa qué parte del valor traduce cada vía.
-- **Precios**: Alpaca, diarios, ajustados por *splits* y dividendos (`adjustment=all`), desde 2016-01-01; entran los 13F
-  presentados desde esa fecha.
+  **Contraste** (añadido el 31-oct, antes de bajar ningún 13F): los *corporate actions* de Alpaca llevan CUSIP y
+  símbolo con fecha (dividendos, *splits*, cambios de nombre, fusiones); donde coincidan con un FTD, se informa la
+  concordancia de las dos traducciones, y un CUSIP en que discrepen no entra.
+- **Precios**: Alpaca, diarios, desde 2016-01-01; entran los 13F presentados desde esa fecha. **Corregido el 31-oct,
+  antes de bajar ningún precio de 2B**, por lo que midió la sonda (27 valores, 2016-2026):
+  - `adjustment=all` con `asof` mezcla ajustes: FB con `asof=2020-01-02` da +83,4 % en 2024–2026, y +79,3 % con precios
+    sin ajustar y dividendos; y `asof` **empalma empresas**: META con `asof=2021-06-01` es el ETF de Roundhill hasta el
+    8-jun-2022 y Meta desde el día siguiente (+1.395 % en un día, sin error);
+  - un símbolo sin negociación sale **relleno con barras de volumen 0** que repiten el último cierre;
+  - `adjustment=all` **sin** `asof` coincide con Yahoo: en 21 valores sin *spin-off*, mediana de |Δ| mensual
+    0,0024 pp y ningún mes por encima de 1 pp (de 2.688); el *split* de EW de 2016, ausente de los *corporate actions*,
+    sí está en el ajuste;
+  - en los *spin-offs* no acierta ninguna de las dos fuentes: de 7 (PFE, T, GE ×3, MMM, IBM), Alpaca yerra en 3 y
+    Yahoo en 4, hasta 6 pp en el mes del valor.
+
+  **La regla**: el símbolo de cada CUSIP y fecha sale de la traducción; las rentabilidades diarias, del ajuste de
+  Alpaca sin `asof`, **sólo si la entidad es la misma**: en cada día de la ventana, el cierre sin ajustar de la consulta
+  por defecto coincide con el de lo que cotizó con ese símbolo ese día (`asof=-`). Si no, del cierre sin ajustar de lo
+  que cotizó, con los dividendos y *splits* de ese CUSIP en los *corporate actions*; y un salto diario de más del 40 %
+  sin evento que lo explique descarta la ventana de ese valor (cuenta como sin precio). Fuera las barras de volumen 0.
+  El día *ex* de un *spin-off* que esté en los *corporate actions*, desde el precio sin ajustar más lo escindido a su
+  cierre de ese día; una fusión registrada, hasta el valor que recibe el accionista (el efectivo, o las acciones del
+  comprador a su cierre). Se informa qué parte del valor va por cada camino. **Robustez**: una cota pesimista, −100 %
+  en la salida de un valor sin fusión registrada cuyo último cierre esté por debajo de la mitad de su máximo de 12
+  meses.
 - **Calendario de cada cartera**: con rentabilidades mensuales, la cartera de un 13F entra en el **primer mes completo
   tras su fecha de presentación** (nunca antes de publicarse) y dura hasta el primer mes completo tras el siguiente 13F
   del mismo gestor, con un máximo de cuatro meses; sin 13F nuevo, el gestor sale. Pesos constantes cada mes, como en la
