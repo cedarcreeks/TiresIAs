@@ -323,3 +323,48 @@ def juicio(posiciones: list, trimestres: list, sp, rf, nanc, reps: int = REPS, p
 def pd_mes():
     import pandas as pd
     return pd.offsets.MonthEnd(1)
+
+
+# ── 8. el ejecutor ───────────────────────────────────────────────────────────
+def ejecutar(raiz: pathlib.Path, pasadas: list, crudo_2a: pathlib.Path, nanc_json: pathlib.Path, reps: int = REPS) -> dict:
+    """De las compras y las pasadas de precios al juicio de 3C (principal y a partes iguales), sólo con agregados."""
+    import datetime as dt
+    import pandas as pd
+    from tiresias import buffett as B, descarga_2b as X, fase2b as F2, precios as P
+    comp = pd.read_parquet(raiz / "compras.parquet").to_dict("records")
+    fin = dt.date(2026, 10, 30)
+    v = {s: x for s, x in ventanas_precios(comp, fin=fin).items() if s}
+    series = {m: X.leer_series(list(pasadas), m) for m in ("all", "raw", "tal_cual")}
+    acciones = {}
+    for d in pasadas:
+        for k, lista in X.leer_acciones(d).items():
+            acciones.setdefault(k, []).extend(lista)
+    r_diaria, caminos = rentabilidades_diarias(v, series, P.IndiceAcciones(acciones))
+    pos = [p for c in comp if c["ticker"] in r_diaria for p in [posicion(c, r_diaria[c["ticker"]])] if p]
+    trimestres = [fin_trimestre(d) for d in pd.date_range("2018-03-31", "2026-06-30", freq="QE").date]
+    Fa = B.cargar(crudo_2a)
+    rf = Fa["RF"]
+    sp = F2.mensual_yahoo(crudo_2a / "SP500TR_1d.json")
+    nanc = F2.mensual_yahoo(nanc_json)
+    caminos_s = pd.Series(caminos).value_counts().to_dict()
+    return {"compras": len(comp), "simbolos": len(v), "caminos_precio": caminos_s,
+            "posiciones_con_precio": len(pos), "congresistas": len({p["miembro"] for p in pos}),
+            "principal": juicio(pos, trimestres, sp, rf, nanc, reps=reps, ponderar=True),
+            "a_partes_iguales": juicio(pos, trimestres, sp, rf, nanc, reps=reps, ponderar=False)}
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    if sys.argv[1:2] == ["juicio"]:
+        casa = pathlib.Path.home()
+        r = ejecutar(casa / "tiresias_datos/fase3/congreso", [pathlib.Path(x) for x in sys.argv[2:]],
+                     casa / "tiresias_datos/fase2/crudo", casa / "tiresias_datos/fase3_sonda/NANC.json")
+        destino = casa / "tiresias_resultados/fase3/3c.json"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(json.dumps(r, indent=1, default=str))
+        print(json.dumps({k: r[k] for k in ("compras", "simbolos", "caminos_precio", "posiciones_con_precio", "congresistas")},
+                         default=str))
+        for k in ("principal", "a_partes_iguales"):
+            print(k, json.dumps({x: r[k][x] for x in ("meses", "copia", "sp500", "placebo_mediana", "placebo_p95",
+                                                     "nanc_comun", "criterios", "cumplidos")}, default=str))
