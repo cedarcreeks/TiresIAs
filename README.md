@@ -51,8 +51,8 @@ flowchart LR
 |---|---|---|---|
 | **1** | ¿Predice Kronos (un modelo fundacional de velas) algo útil, fuera de su entrenamiento y con costes? | ✅ cerrada, 29-oct-2026 | **No.** Ronda 1: no aporta en ningún horizonte. Ronda 2: 0 de 5 criterios, ninguno sobrevive a Holm, ni reentrenado como sus autores ([resultados](docs/RESULTADOS_RONDA2.md)) |
 | **2A** | ¿Se reproduce la tabla 4 de *Buffett's Alpha* con datos públicos? (el control) | ✅ 31-oct-2026 | **Sí, 3 de 3.** BAB 0,29 [0,29], QMJ 0,47 [0,43]; el alfa pasa de 10,0 % (t 2,68) a 4,0 % (t 1,02) con los seis factores. HML, en el borde ([resultados](docs/RESULTADOS_FASE2A.md)) |
-| **2A′** | ¿Sigue viva la receta de Buffett después de publicarse (2012 →)? | 🟡 siguiente | — |
-| **2B** | ¿La receta de los mejores gestores, elegidos sin mirar al futuro, bate al S&P 500? | ⏳ | — |
+| **2A′** | ¿Sigue viva la receta de Buffett después de publicarse (2012 →)? | ❌ 31-oct-2026 | **No, 2 de 3.** Sharpe +0,65 sobre el mercado en 2012–2019, −0,05 en 2019–2026. Y desde 2012 ni Berkshire bate al mercado (0,77 frente a 0,94) ([resultados](docs/RESULTADOS_FASE2A.md#2a-sigue-viva-la-receta-después-de-publicarse-no-2-de-3)) |
+| **2B** | ¿La receta de los mejores gestores, elegidos sin mirar al futuro, bate al S&P 500? | 🟡 siguiente | — |
 | **2C** | ¿Y hecha con ETF que se pueden comprar, con costes e impuestos? | ⏳ sólo si 2B pasa | — |
 
 Los criterios de cada fase, con sus umbrales, están en [docs/PLAN_FASE2.md](docs/PLAN_FASE2.md), commiteado antes de

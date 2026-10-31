@@ -1,4 +1,4 @@
-# Resultados de la fase 2A: el control, *Buffett's Alpha* con datos públicos (2026-10-31)
+# Resultados de la fase 2A y 2A′: *Buffett's Alpha* con datos públicos, y después de publicarse (2026-10-31)
 
 Criterio fijado antes de bajar los datos en [PLAN_FASE2.md](PLAN_FASE2.md) (`ac57fb5`). Código:
 `python -m tiresias.buffett`. Aquí sólo hay coeficientes: ningún precio.
@@ -43,7 +43,33 @@ control, 0 de 3. El verificador puede fallar.
 dividendos); `F-F_Research_Data_Factors` y `F-F_Momentum_Factor` (CRSP 202609); las hojas «BAB Factors» y «QMJ Factors»
 de AQR, columna USA, descargadas el 31-oct-2026. Tests: 13, con 6 mutantes que mueren.
 
-## Siguiente: 2A′
+## 2A′: ¿sigue viva la receta después de publicarse? **No: 2 de 3**
 
-Las cargas de la columna 3, congeladas con 1980–2011, y la estrategia sistemática del artículo de 2012 en adelante:
-¿sigue viva la receta después de publicarse?
+La estrategia sistemática de la sección 7, con sus parámetros **estimados en 1980–2011 y congelados**: beta univariante
+0,64; la parte activa (cargas MKT +0,28, SMB −0,24, HML +0,31, UMD −0,09, BAB +0,29, QMJ +0,47) reescalada ×2,69 hasta
+la volatilidad idiosincrática de Berkshire; más la beta por el mercado. Sharpe anualizado del exceso sobre el tipo libre:
+
+| | estrategia sistemática | Berkshire real | mercado | estrategia − mercado |
+|---|---|---|---|---|
+| **dentro de muestra**, 1980-04 → 2011-12 (diagnóstico) | **1,15** [artículo, 1976–2011: 1,14] | 0,72 [0,76] | 0,45 [0,39] | |
+| **2012-01 → 2026-08** (181 meses) | 1,10 | 0,77 | 0,94 | **+0,16** ✓ |
+| primera mitad, → 2019-04 | 1,90 | 1,14 | 1,25 | **+0,65** ✓ |
+| segunda mitad, 2019-05 → | 0,71 | 0,55 | 0,76 | **−0,05** ✗ |
+
+**Veredicto**: el criterio pedía +0,10 en el total y en cada mitad; falla la segunda. La receta funcionó siete años
+después de publicarse y dejó de hacerlo los siete siguientes. Y algo que el artículo no podía saber: **desde 2012 el
+propio Berkshire no bate al mercado** en Sharpe (0,77 frente a 0,94).
+
+**Cómo leerlo**: la estrategia es una combinación de factores **largo-corto con apalancamiento** (escala 2,69), sin
+costes: no se puede comprar tal cual. Los autores ya lo decían; su versión **sólo a largo** daba, dentro de muestra,
+Sharpe 0,45 frente a 0,39 del mercado (tabla 2). Y AQR reconstruye la historia de BAB y QMJ en cada actualización: lo de
+2012 en adelante se mide con las series de hoy. Que dentro de muestra salga 1,15 frente a 1,14 confirma el montaje.
+
+Tests: 19 (13 de 2A y 6 de 2A′), con 10 mutantes que mueren; el que estimaba con toda la muestra (mirar al futuro) lo
+caza `test_los_parametros_no_miran_despues_de_2011`. Uno sobrevivía (la escala con la volatilidad total): el test
+comparaba con el valor del propio código; ahora lo calcula aparte y muere.
+
+## Siguiente: 2B
+
+Lo genérico: la receta de los mejores gestores 13F, elegidos sin mirar al futuro, frente al S&P 500, a un placebo y a
+la de todos los gestores (el plan lo decía: 2B no depende de Buffett).

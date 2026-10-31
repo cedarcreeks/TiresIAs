@@ -94,7 +94,7 @@ def ols(y: pd.Series, X: pd.DataFrame) -> dict:
     r2 = 1 - (e @ e) / np.sum((y.to_numpy() - y.mean()) ** 2)
     nombres = ["alfa"] + list(X.columns)
     return {"coef": dict(zip(nombres, b.tolist())), "t": dict(zip(nombres, (b / se).tolist())), "n": int(n),
-            "r2_ajustado": float(1 - (1 - r2) * (n - 1) / (n - k))}
+            "r2_ajustado": float(1 - (1 - r2) * (n - 1) / (n - k)), "residuo_sd": float(np.std(e, ddof=k))}
 
 
 def tabla4(datos: pd.DataFrame) -> dict:
@@ -117,6 +117,61 @@ def veredicto(t4: dict) -> dict:
     }
     n = sum(crit.values())
     return {"criterios": crit, "cumplidos": n, "de": len(crit), "pasa": n == len(crit)}
+
+
+# ── 2A′: la estrategia sistemática de la sección 7, congelada con 1980–2011 ──────────────────────────────────────────
+DESDE_FUERA = "2012-01-31"
+SEIS = FACTORES["columna 3"]
+
+
+def estilo_buffett(datos: pd.DataFrame) -> dict:
+    """Los parámetros de la sección 7 con `datos` (el periodo de estimación): beta univariante, cargas de la parte
+    activa (la regresión del exceso menos beta·MKT sobre los seis factores) y la escala que lleva esa parte activa a la
+    volatilidad idiosincrática de Berkshire."""
+    beta = ols(datos["EXCESO"], datos[["MKT"]])["coef"]["MKT"]
+    idio = (datos["EXCESO"] - beta * datos["MKT"])
+    r = ols(idio, datos[SEIS])
+    cargas = {f: r["coef"][f] for f in SEIS}
+    activa = sum(cargas[f] * datos[f] for f in SEIS)
+    sigma_i = float(ols(datos["EXCESO"], datos[["MKT"]])["residuo_sd"])
+    return {"beta": float(beta), "cargas": cargas, "escala": sigma_i / float(activa.std()), "sigma_idio": sigma_i}
+
+
+def aplicar_estilo(datos: pd.DataFrame, p: dict) -> pd.Series:
+    """El exceso mensual de la estrategia sistemática con parámetros `p` congelados: beta·MKT + escala·Σ cargas·factor."""
+    return p["beta"] * datos["MKT"] + p["escala"] * sum(p["cargas"][f] * datos[f] for f in SEIS)
+
+
+def resumen(exceso: pd.Series, mkt: pd.Series) -> dict:
+    """Exceso medio, volatilidad y Sharpe anualizados, y beta frente al mercado."""
+    return {"exceso_anual": float(exceso.mean() * 12), "volatilidad": float(exceso.std() * np.sqrt(12)),
+            "sharpe": float(exceso.mean() / exceso.std() * np.sqrt(12)),
+            "beta": float(ols(exceso, mkt.to_frame("MKT"))["coef"]["MKT"]), "meses": int(len(exceso))}
+
+
+def veredicto_fuera(fuera: dict) -> dict:
+    """2A′ (docs/PLAN_FASE2.md): la receta sigue viva si su Sharpe supera al del mercado en ≥ 0,10 en 2012→ y en cada
+    mitad."""
+    crit = {t: fuera[t]["estilo"]["sharpe"] - fuera[t]["mercado"]["sharpe"] >= 0.10
+            for t in ("total", "primera_mitad", "segunda_mitad")}
+    n = sum(crit.values())
+    return {"criterios": crit, "cumplidos": n, "de": len(crit), "viva": n == len(crit)}
+
+
+def fase_2a_prima(df: pd.DataFrame) -> dict:
+    dentro = df.loc[DESDE:HASTA]
+    p = estilo_buffett(dentro)
+    fuera = df.loc[DESDE_FUERA:].dropna()
+    mitad = fuera.index[len(fuera) // 2]
+    tramos = {"total": fuera, "primera_mitad": fuera.loc[:mitad - pd.offsets.MonthEnd(1)], "segunda_mitad": fuera.loc[mitad:]}
+    out = {"parametros": p, "dentro": {"estilo": resumen(aplicar_estilo(dentro, p), dentro["MKT"]),
+                                       "berkshire": resumen(dentro["EXCESO"], dentro["MKT"]),
+                                       "mercado": resumen(dentro["MKT"], dentro["MKT"])}}
+    out["fuera"] = {t: {"desde": str(x.index[0].date()), "hasta": str(x.index[-1].date()),
+                        "estilo": resumen(aplicar_estilo(x, p), x["MKT"]), "berkshire": resumen(x["EXCESO"], x["MKT"]),
+                        "mercado": resumen(x["MKT"], x["MKT"])} for t, x in tramos.items()}
+    out["veredicto"] = veredicto_fuera(out["fuera"])
+    return out
 
 
 def cargar(datos: pathlib.Path) -> pd.DataFrame:
@@ -153,6 +208,16 @@ def main(argv=None) -> int:
         celdas = " · ".join(f"{k} {r['coef'][k]:+.2f} ({r['t'][k]:+.2f}) [{p[k][0]:+.2f}]" for k in p)
         buf.write(f"{col}: {celdas} · R² aj. {r['r2_ajustado']:.2f}\n")
     buf.write(f"veredicto: {json.dumps(v, ensure_ascii=False)}\n")
+    ap2 = fase_2a_prima(cargar(pathlib.Path(a.datos)))
+    (salida / "2a_prima.json").write_text(json.dumps(ap2, indent=1, ensure_ascii=False), encoding="utf-8")
+    pp = ap2["parametros"]
+    buf.write(f"\n2A′ · beta {pp['beta']:.2f} · escala {pp['escala']:.2f} · cargas "
+              + " ".join(f"{k} {v:+.2f}" for k, v in pp["cargas"].items()) + "\n")
+    for nombre, bloque in [("dentro 1980–2011", ap2["dentro"])] + [(f"{t} {x['desde'][:7]}→{x['hasta'][:7]}", x)
+                                                                  for t, x in ap2["fuera"].items()]:
+        buf.write(f"{nombre}: " + " · ".join(f"{k} Sharpe {bloque[k]['sharpe']:.2f} (exceso {bloque[k]['exceso_anual']:+.1%},"
+                                             f" vol {bloque[k]['volatilidad']:.1%})" for k in ("estilo", "berkshire", "mercado")) + "\n")
+    buf.write(f"veredicto 2A′: {json.dumps(ap2['veredicto'], ensure_ascii=False)}\n")
     print(buf.getvalue(), end="")
     return 0
 

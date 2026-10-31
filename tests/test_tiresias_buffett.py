@@ -107,3 +107,43 @@ def test_cada_criterio_tumba_el_control(romper, criterio):
     romper(t)
     v = B.veredicto(t)
     assert not v["pasa"] and not v["criterios"][criterio], v
+
+
+# ── 2A′ ───────────────────────────────────────────────────────────────────
+def _df_sintetico(n=480, semilla=11):
+    rng = np.random.default_rng(semilla)
+    idx = pd.date_range("1980-04-30", periods=n, freq="ME")
+    f = pd.DataFrame(rng.normal(0.004, 0.04, (n, 6)), index=idx, columns=["MKT", "SMB", "HML", "UMD", "BAB", "QMJ"])
+    f["EXCESO"] = 0.003 + 0.7 * f["MKT"] + 0.3 * f["BAB"] + 0.4 * f["QMJ"] + rng.normal(0, 0.05, n)
+    return f
+
+
+def test_la_parte_activa_iguala_la_volatilidad_idiosincratica():
+    d = _df_sintetico().loc[B.DESDE:B.HASTA]
+    p = B.estilo_buffett(d)
+    activa = B.aplicar_estilo(d, p) - p["beta"] * d["MKT"]
+    pendiente, corte = np.polyfit(d["MKT"], d["EXCESO"], 1)        # la idiosincrática, aparte (no la del código)
+    residuo = d["EXCESO"] - (corte + pendiente * d["MKT"])
+    assert p["sigma_idio"] == pytest.approx(float(residuo.std(ddof=2)), rel=1e-9)
+    assert p["sigma_idio"] < float(d["EXCESO"].std()) * 0.9          # menor que la total: no es la total
+    assert float(activa.std()) == pytest.approx(p["sigma_idio"], rel=1e-9)
+    assert p["beta"] == pytest.approx(B.ols(d["EXCESO"], d[["MKT"]])["coef"]["MKT"])
+    assert p["cargas"]["BAB"] > 0.15 and p["cargas"]["QMJ"] > 0.2
+
+
+def test_los_parametros_no_miran_despues_de_2011():
+    d = _df_sintetico()
+    a = B.fase_2a_prima(d)
+    d2 = d.copy()
+    d2.loc["2012-01-31":, "EXCESO"] = 0.5                 # lo de después cambia por completo…
+    b = B.fase_2a_prima(d2)
+    assert a["parametros"] == b["parametros"]             # …y los parámetros, no
+    assert a["fuera"]["total"]["desde"] == "2012-01-31"
+
+
+@pytest.mark.parametrize("d_total,d_1,d_2,viva", [
+    (0.125, 0.125, 0.125, True), (0.0625, 0.25, 0.25, False), (0.25, 0.0625, 0.25, False), (0.25, 0.25, -0.125, False)])
+def test_veredicto_de_2a_prima(d_total, d_1, d_2, viva):
+    f = {t: {"estilo": {"sharpe": 0.25 + d}, "mercado": {"sharpe": 0.25}}
+         for t, d in (("total", d_total), ("primera_mitad", d_1), ("segunda_mitad", d_2))}
+    assert B.veredicto_fuera(f)["viva"] is viva
