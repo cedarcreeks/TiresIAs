@@ -308,3 +308,27 @@ def test_otro_400_sigue_parando():
     red = _Red([(400, '{"message":"invalid symbol: OTRO"}')])                # uno que no se pidió: no se oculta
     with pytest.raises(P.SimboloInvalido):
         P.Alpaca("k", "s", abrir=red, dormir=lambda _: None).barras(["A"], "2026-01-01", "2026-02-01", "raw")
+
+
+def test_el_indice_de_acciones_da_lo_mismo_que_acciones_de():
+    """Equivalencia con eventos al azar: por CUSIP, por símbolo y fecha de tramo, repetidos y sin CUSIP."""
+    import random
+    rng = random.Random(5)
+    cus, sims = [f"C{i}" for i in range(8)], [f"S{i}" for i in range(6)]
+    def fecha():
+        return D(2016 + rng.randrange(8), rng.randrange(1, 13), rng.randrange(1, 28)).isoformat()
+    todas = {"cash_dividends": [], "spin_offs": [], "cash_mergers": [], "name_changes": []}
+    for i in range(400):
+        tipo = rng.choice(list(todas))
+        c = rng.choice(cus + [None])
+        s = rng.choice(sims)
+        campos = {"cash_dividends": ("cusip", "symbol", "ex_date"), "spin_offs": ("source_cusip", "source_symbol", "ex_date"),
+                  "cash_mergers": ("acquiree_cusip", "acquiree_symbol", "effective_date"),
+                  "name_changes": ("old_cusip", "old_symbol", "process_date")}[tipo]
+        todas[tipo].append({"id": str(rng.randrange(300)), campos[0]: c, campos[1]: s, campos[2]: fecha()})
+    idx = P.IndiceAcciones(todas)
+    for _ in range(200):
+        c = rng.choice(cus)
+        tramos = [(rng.choice(sims), D(2016 + rng.randrange(4), 1, 1), D(2020 + rng.randrange(4), 12, 31))
+                  for _ in range(rng.randrange(3))]
+        assert idx.de(c, tramos) == P.acciones_de(c, todas, tramos)

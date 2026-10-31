@@ -130,6 +130,7 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
     (desde, hasta)}, "ajenos": {(símbolo, fecha)}}; estado es «ok», «sin contraste», «pendiente» o «no cuadra»."""
     from tiresias import precios as P
     tramos, estado, pendientes, ajenos = {}, {}, {}, set()
+    indice = acciones if isinstance(acciones, P.IndiceAcciones) else P.IndiceAcciones(acciones)
     def pedido_cubre(s, i, f):
         a, b = rangos_pedidos.get(s, (None, None))
         return a is not None and a <= i and f <= b
@@ -149,7 +150,7 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
         n, med = P.contraste_ftd(regs, serie)
         return "sin contraste" if not n else ("ok" if med <= P.CONTRASTE_MAX else "no cuadra")
     for c, (desde, hasta) in ventanas_c.items():
-        acc_c = P.acciones_de(c, acciones)
+        acc_c = indice.de(c)
         ts = P.tramos(simb.get(c, []), desde, hasta, P.cambios_de_nombre(acc_c))
         if not ts:
             continue
@@ -169,10 +170,11 @@ def revisar(ventanas_c: dict, simb: dict, prec: dict, tal_cual: dict, acciones: 
             estados.append(e)
         tramos[c] = finales
         estado[c] = next((x for x in ("no cuadra", "pendiente", "sin contraste") if x in estados), "ok")
-        for d in P.acciones_de(c, acciones, finales).get("spin_offs", []):
+        acc_f = indice.de(c, finales)
+        for d in acc_f.get("spin_offs", []):
             ajenos.add((d["new_symbol"], dt.date.fromisoformat(d["ex_date"])))
         for k in ("stock_mergers", "stock_and_cash_mergers"):
-            for d in P.acciones_de(c, acciones, finales).get(k, []):
+            for d in acc_f.get(k, []):
                 ajenos.add((d["acquirer_symbol"], dt.date.fromisoformat(d["effective_date"])))
     return {"tramos": tramos, "estado": estado, "rangos_pendientes": pendientes, "ajenos": ajenos}
 
@@ -219,7 +221,8 @@ def rentabilidades_por_cusip(pos, ftd, pasadas, fin_datos, pesimista=False) -> d
     ca = contraste_ca(acciones, simb)
     validos = {c: t for c, t in rev["tramos"].items()
                if rev["estado"][c] in ("ok", "sin contraste") and c not in ca["discrepan"]}
-    acc = {c: P.acciones_de(c, acciones, t) for c, t in validos.items()}
+    indice = P.IndiceAcciones(acciones)
+    acc = {c: indice.de(c, t) for c, t in validos.items()}
     tc = series["tal_cual"]
     ajenos = {(s, f): tc[s][f][0] for s, f in rev["ajenos"] if f in P._con_volumen(tc.get(s, {}))}
     r, caminos = P.rentabilidades(validos, series, acc, ajenos, {c: v[c] for c in validos}, pesimista)
@@ -257,6 +260,7 @@ def contraste_ca(acciones: dict, simb: dict) -> dict:
     from tiresias import precios as P
     comparados = coinciden = 0
     discrepan = {}
+    por_cusip = {}                      # fechas y cambios de símbolo de cada CUSIP, una vez (no por cada evento)
     for tipo, v in acciones.items():
         campo_c, campo_s, campo_f = P._PAPEL.get(tipo, ("cusip", "symbol", "ex_date"))
         for d in v:
@@ -265,11 +269,13 @@ def contraste_ca(acciones: dict, simb: dict) -> dict:
             if not (c and s and f and regs):
                 continue
             f = dt.date.fromisoformat(f)
-            fechas = [x for x, _ in regs]
+            if c not in por_cusip:
+                fs = [x for x, _ in regs]
+                por_cusip[c] = (fs, [fs[k] for k in range(1, len(regs)) if regs[k][1] != regs[k - 1][1]])
+            fechas, cambios = por_cusip[c]
             i = bisect.bisect_right(fechas, f) - 1
             if i < 0:
                 continue
-            cambios = [fechas[k] for k in range(1, len(regs)) if regs[k][1] != regs[k - 1][1]]
             if any(abs((f - x).days) <= DIAS_CAMBIO for x in cambios):
                 continue
             comparados += 1

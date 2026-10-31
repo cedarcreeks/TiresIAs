@@ -394,6 +394,42 @@ def acciones_de(cusip: str, todas: dict, tramos_c: list = ()) -> dict:
     return out
 
 
+class IndiceAcciones:
+    """`acciones_de` para muchos CUSIP: recorrer todos los eventos y volver a leer sus fechas por cada CUSIP era de
+    orden CUSIP × eventos (77.929 × cientos de miles: la revisión de 2B no acababa en una hora; lo dijo el muestreo
+    del proceso). Se indexa una vez por CUSIP y por símbolo, con las fechas ya leídas, y `de` devuelve lo mismo que
+    `acciones_de`, en el mismo orden (test de equivalencia)."""
+
+    def __init__(self, todas: dict):
+        self._tipos = list(todas)
+        self._por_cusip, self._por_simbolo = {}, {}
+        for k, v in todas.items():
+            campo_c, campo_s, campo_f = _PAPEL.get(k, ("cusip", "symbol", "ex_date"))
+            for n, d in enumerate(v):
+                if d.get(campo_c):
+                    self._por_cusip.setdefault((k, d[campo_c]), []).append((n, d))
+                if d.get(campo_s) and d.get(campo_f):
+                    self._por_simbolo.setdefault((k, d[campo_s]), []).append(
+                        (n, dt.date.fromisoformat(d[campo_f]), d))
+
+    def de(self, cusip: str, tramos_c: list = ()) -> dict:
+        out = {}
+        for k in self._tipos:
+            elegidos = {n: d for n, d in self._por_cusip.get((k, cusip), [])}
+            for s, i, h in tramos_c:
+                for n, f, d in self._por_simbolo.get((k, s), []):
+                    if i <= f <= h:
+                        elegidos[n] = d
+            vistos, sel = set(), []
+            for n in sorted(elegidos):
+                d = elegidos[n]
+                if d.get("id", id(d)) not in vistos:
+                    vistos.add(d.get("id", id(d)))
+                    sel.append(d)
+            out[k] = sel
+        return out
+
+
 # ── 5. el plan de descarga y el montaje ──────────────────────────────────────
 def plan(ventanas: dict, registros: dict, cambios: dict) -> tuple:
     """({cusip: tramos}, {símbolo: (desde, hasta)}): qué símbolo pedir y en qué fechas, para todas las ventanas.
