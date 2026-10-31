@@ -62,3 +62,49 @@ def descargar(ptrs: list, destino: pathlib.Path, abrir=None, dormir=None, pausa:
         tmp.replace(f)
         bajados += 1
     return {"bajados": bajados, "ya_estaban": ya, "faltan": len(faltan)}
+
+
+# ── 3. las operaciones de una declaración ────────────────────────────────────
+import re  # noqa: E402
+
+# Las de 2016 traen las mayúsculas rotas por la fuente del PDF («(BaX)», «s» por S) y días de una cifra («09/7/2016»)
+_FECHAS = re.compile(r"\s([PSE]|S \(partial\))\s+(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(.*)$", re.I)
+_TICKER = re.compile(r"\(([A-Za-z][A-Za-z0-9.\-]{0,6})\)")
+_NO_TICKER = {"PARTIAL"}
+_CLASE = re.compile(r"\[([A-Z]{2})\]")
+_IMPORTE = re.compile(r"\$([\d,]+)")
+# los tramos legales de importe: el mínimo de cada tramo y su máximo
+TRAMOS = {1001: 15000, 15001: 50000, 50001: 100000, 100001: 250000, 250001: 500000, 500001: 1000000,
+          1000001: 5000000, 5000001: 25000000, 25000001: 50000000, 50000001: 50000001}
+
+
+def operaciones(texto: str) -> list:
+    """Las operaciones de una PTR electrónica (salida de `pdftotext -layout`): una por cada línea con su tipo y sus dos
+    fechas (operación y notificación), que es lo único que no se parte. El símbolo es el último «(XXX)» de esa línea o
+    de las dos anteriores; la clase de activo («[ST]» acciones), de esa línea o de las dos siguientes; el importe, el
+    tramo legal que empieza en el primer «$» tras las fechas. Devuelve [{"ticker", "tipo", "fecha_operacion",
+    "fecha_notificacion", "importe_min", "importe_max", "clase"}]; sin ticker, ticker None."""
+    lineas = texto.splitlines()
+    filas = [i for i, linea in enumerate(lineas) if _FECHAS.search(linea)]
+    out = []
+    for n, i in enumerate(filas):
+        linea = lineas[i]
+        m = _FECHAS.search(linea)
+        tipo, f_op, f_not, resto = m.groups()
+        antes = linea[:m.start()]
+        # sin pasar a la operación vecina: un activo sin símbolo heredaba el de la anterior (lo cazó su test)
+        previa = filas[n - 1] if n else -1
+        siguiente = filas[n + 1] if n + 1 < len(filas) else len(lineas)
+        arriba = [lineas[k] for k in (i - 1, i - 2) if k > previa]
+        abajo = [lineas[k] for k in (i + 1, i + 2) if k < siguiente]
+        def tickers(x):
+            return [s.upper() for s in _TICKER.findall(x) if s.upper() not in _NO_TICKER]
+        # en su línea, o en las de arriba (el nombre partido), o en las de abajo (el símbolo partido: «(FOXa)»)
+        tick = tickers(antes) or [s for x in arriba for s in tickers(x)][:1] or [s for x in abajo for s in tickers(x)][:1]
+        clase = _CLASE.findall(linea) or [c for x in abajo for c in _CLASE.findall(x)][:1]
+        imp = _IMPORTE.findall(resto)
+        minimo = int(imp[0].replace(",", "")) if imp else None
+        out.append({"ticker": tick[-1] if tick else None, "tipo": tipo[0].upper(),
+                    "fecha_operacion": f_op, "fecha_notificacion": f_not, "importe_min": minimo,
+                    "importe_max": TRAMOS.get(minimo), "clase": clase[0] if clase else None})
+    return out
