@@ -18,6 +18,7 @@ from __future__ import annotations
 import bisect
 import datetime as dt
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -235,6 +236,15 @@ def salida_pesimista(r_mensual: dict, crudo: dict, hasta: dt.date, con_fusion: b
 
 
 # ── 4. la descarga ───────────────────────────────────────────────────────────
+class SimboloInvalido(Exception):
+    """Alpaca rechaza la petición entera (400 «invalid symbol: X») si un símbolo no es válido: el FTD trae
+    pseudosímbolos de operaciones corporativas (M606SPINOFF, J118REORGPYMNT; medido el 31-oct)."""
+
+    def __init__(self, simbolo: str):
+        super().__init__(simbolo)
+        self.simbolo = simbolo
+
+
 class Alpaca:
     """Barras diarias y corporate actions, con paginación, pausa entre peticiones y reintentos ante 429 y 5xx.
     `abrir` se cambia en los tests; las claves no se imprimen nunca."""
@@ -248,6 +258,7 @@ class Alpaca:
         self._dormir = dormir or time.sleep
         self.peticiones = 0
         self.sin_datos = []     # símbolos que no devolvieron nada ni pedidos solos
+        self.invalidos = []     # los que Alpaca rechaza por no ser símbolos (y se quitan de la petición)
 
     def _get(self, ruta: str, q: dict) -> dict:
         url = self.BASE + ruta + "?" + urllib.parse.urlencode(q)
@@ -257,6 +268,12 @@ class Alpaca:
             try:
                 return json.loads(self._abrir(urllib.request.Request(url, headers=self._cab)))
             except urllib.error.HTTPError as e:
+                if e.code == 400:
+                    cuerpo = e.read().decode(errors="replace")
+                    m = re.search(r"invalid symbol:\s*([^\s\"]+)", cuerpo)
+                    if m:
+                        raise SimboloInvalido(m.group(1)) from None
+                    raise
                 if e.code not in (429, 500, 502, 503, 504) or intento == self.reintentos:
                     raise
                 self._dormir(min(60.0, 2.0 ** intento))
@@ -277,7 +294,21 @@ class Alpaca:
             q["asof"] = asof
         out = {}
         while True:
-            d = self._get("/v2/stocks/bars", q)
+            try:
+                d = self._get("/v2/stocks/bars", q)
+            except SimboloInvalido as e:
+                if e.simbolo not in simbolos:
+                    raise
+                # fuera de la petición, apuntado, y otra vez desde el principio con el resto
+                self.invalidos.append(e.simbolo)
+                self.sin_datos.append((e.simbolo, desde, hasta, ajuste, asof))
+                simbolos = [s for s in simbolos if s != e.simbolo]
+                if not simbolos:
+                    return {}
+                q["symbols"] = ",".join(simbolos)
+                q.pop("page_token", None)
+                out = {}
+                continue
             for s, bs in (d.get("bars") or {}).items():
                 serie = out.setdefault(s, {})
                 for b in bs:
@@ -309,7 +340,23 @@ class Alpaca:
             q["symbols"] = ",".join(simbolos)
         out = {}
         while True:
-            d = self._get("/v1/corporate-actions", q)
+            try:
+                d = self._get("/v1/corporate-actions", q)
+            except SimboloInvalido as e:
+                lista = q.get("symbols", "").split(",")
+                if e.simbolo not in lista:
+                    raise
+                self.invalidos.append(e.simbolo)
+                lista = [s for s in lista if s != e.simbolo]
+                q.pop("page_token", None)
+                out = {}
+                if lista:
+                    q["symbols"] = ",".join(lista)
+                else:
+                    q.pop("symbols")
+                    if "cusips" not in q:
+                        return {}
+                continue
             for k, v in (d.get("corporate_actions") or {}).items():
                 out.setdefault(k, []).extend(v)
             if not d.get("next_page_token"):

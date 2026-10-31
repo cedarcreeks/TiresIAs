@@ -114,4 +114,4 @@ if __name__ == "__main__":
     a = P.Alpaca(os.environ["APCA_API_KEY_ID"], os.environ["APCA_API_SECRET_KEY"])
     r = ejecutar(pedido, destino, a)
     print(f"{a.peticiones} peticiones; partes hechas {r['hechas']}, ya estaban {r['saltadas']}; "
-          f"sin datos ni pedidos solos: {len(r['sin_datos'])}")
+          f"sin datos ni pedidos solos: {len(r['sin_datos'])}; inválidos para Alpaca: {sorted(set(a.invalidos))}")

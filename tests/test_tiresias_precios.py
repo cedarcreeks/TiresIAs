@@ -171,6 +171,8 @@ class _Red:
         x = self.respuestas.pop(0)
         if isinstance(x, int):
             raise urllib.error.HTTPError(req.full_url, x, "x", {}, io.BytesIO(b""))
+        if isinstance(x, tuple):                                          # (código, cuerpo)
+            raise urllib.error.HTTPError(req.full_url, x[0], "x", {}, io.BytesIO(x[1].encode()))
         return json.dumps(x).encode()
 
 
@@ -281,3 +283,28 @@ def test_el_contraste_compara_con_el_cierre_del_dia_habil_anterior():
     assert P.contraste_ftd([(f[1], float("nan"))], tal_cual) == (0, None)
     assert P.contraste_ftd([(f[3], 101.0)], tal_cual) == (1, pytest.approx(0.0))     # salta el relleno del 4-ene
     assert P.contraste_ftd([(D(2024, 2, 20), 104.0)], tal_cual) == (0, None)          # sin cierre en la semana previa
+
+
+def test_un_simbolo_invalido_se_quita_y_el_resto_se_pide():
+    """El FTD trae pseudosímbolos (M606SPINOFF): Alpaca da 400 a la petición entera."""
+    b = {"t": "2026-06-01T04:00:00Z", "c": 10.0, "v": 5}
+    red = _Red([(400, '{"message":"invalid symbol: M606SPINOFF"}'), {"bars": {"A": [b]}}])
+    a = P.Alpaca("k", "s", abrir=red, dormir=lambda _: None)
+    out = a.barras(["A", "M606SPINOFF"], "2026-05-21", "2026-09-30", "raw", asof="-", solos=set())
+    assert set(out) == {"A"} and a.invalidos == ["M606SPINOFF"] and "symbols=A&" in red.pedidas[1].full_url
+    assert ("M606SPINOFF", "2026-05-21", "2026-09-30", "raw", "-") in a.sin_datos
+    # en los corporate actions, igual
+    red = _Red([(400, '{"message":"invalid symbol: J118REORGPYMNT"}'), {"corporate_actions": {"x": [1]}}])
+    a = P.Alpaca("k", "s", abrir=red, dormir=lambda _: None)
+    assert a.acciones("2016-01-01", "2026-10-30", simbolos=["A", "J118REORGPYMNT"]) == {"x": [1]}
+    assert "symbols=A" in red.pedidas[1].full_url and "J118" not in red.pedidas[1].full_url
+    assert a.invalidos == ["J118REORGPYMNT"]
+
+
+def test_otro_400_sigue_parando():
+    red = _Red([(400, '{"message":"invalid timeframe"}')])
+    with pytest.raises(urllib.error.HTTPError):
+        P.Alpaca("k", "s", abrir=red, dormir=lambda _: None).barras(["A"], "2026-01-01", "2026-02-01", "raw")
+    red = _Red([(400, '{"message":"invalid symbol: OTRO"}')])                # uno que no se pidió: no se oculta
+    with pytest.raises(P.SimboloInvalido):
+        P.Alpaca("k", "s", abrir=red, dormir=lambda _: None).barras(["A"], "2026-01-01", "2026-02-01", "raw")
