@@ -96,7 +96,7 @@ flowchart LR
 ```bash
 python3.12 -m venv ~/.venvs/tiresias && source ~/.venvs/tiresias/bin/activate
 pip install -r requirements.txt
-python -m pytest tests            # 161 tests (at the repository root, pytest would also collect finetune/, which needs qlib)
+python -m pytest tests            # 166 tests (at the repository root, pytest would also collect finetune/, which needs qlib)
 python -m tiresias.buffett        # phases 2A and 2A′
 ```
 
@@ -113,7 +113,7 @@ Outputs (aggregates only) are written to `~/tiresias_resultados/fase2/`.
 ## Repository layout
 
 ```
-tiresias/      research code (phase 1: Kronos evaluation; phase 2: buffett.py, gestores.py, precios.py)
+tiresias/      research code (phase 1: Kronos evaluation; phase 2: buffett.py, gestores.py, precios.py, ingesta_2b.py, fase2b.py, descarga_2b.py)
 tests/         unit tests (mutation-checked) and model regression tests
 docs/          pre-registered plans and results (Spanish)
 exploratorio/  exploratory work outside any pre-registered criterion
