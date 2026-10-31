@@ -114,7 +114,9 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
 - **Calendario de cada cartera**: con rentabilidades mensuales, la cartera de un 13F entra en el **primer mes completo
   tras su fecha de presentación** (nunca antes de publicarse) y dura hasta el primer mes completo tras el siguiente 13F
   del mismo gestor, con un máximo de cuatro meses; sin 13F nuevo, el gestor sale. Pesos constantes cada mes, como en la
-  tabla 4 del artículo.
+  tabla 4 del artículo. **Aclarado el 31-oct, antes de medir ninguna rentabilidad**: un 13F atrasado de un periodo
+  anterior al último ya presentado por ese gestor no es una cartera nueva (en 2016q1, 28 de 4.184; uno de 2014-12
+  presentado en 2016) y no cuenta. Los conjuntos de la SEC van por fecha de presentación.
 - **Cobertura mínima**: un gestor entra en un trimestre sólo si tiene precio el **≥ 90 %** del valor de sus acciones
   declaradas y al menos 10 posiciones con precio. Se informa la cobertura agregada de cada trimestre y, como robustez,
   el resultado con 80 % y 95 %. **Si la cobertura agregada del valor de los gestores elegibles es menor del 85 % en más

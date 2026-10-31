@@ -62,6 +62,27 @@ FTD = ("SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
        "Trailer record count 3\n")
 
 
+def test_el_ftd_cuenta_contra_su_recuento_y_no_salta_filas():
+    t = G.leer_ftd(FTD)
+    assert len(t) == 3 and t.attrs["declaradas"] == 3
+    con_barra = FTD.replace("TWITTER INC", "TWITTER | INC")                 # una barra en la descripción
+    assert len(G.leer_ftd(con_barra)) == 3
+    with pytest.raises(ValueError, match="declara 4"):
+        G.leer_ftd(FTD.replace("Trailer record count 3", "Trailer record count 4"))
+    with pytest.raises(ValueError, match="sin sus seis campos"):
+        G.leer_ftd(FTD.replace("20221001|90184L102|TWTR|300|TWITTER INC|50.0", "20221001|90184L102|TWTR"))
+
+
+def test_una_tabla_13f_con_lineas_que_no_cuadran_falla(tmp_path):
+    f = tmp_path / "x.zip"
+    roto = INF.replace("A3\tMICROSOFT", "A3\tMICRO\nSOFT")                 # una línea partida en dos
+    with zipfile.ZipFile(f, "w") as z:
+        for nombre, texto in (("SUBMISSION.tsv", SUB), ("COVERPAGE.tsv", COV), ("INFOTABLE.tsv", roto)):
+            z.writestr(nombre, texto)
+    with pytest.raises(ValueError, match="INFOTABLE"):
+        G.leer_13f(f)
+
+
 def test_el_traductor_da_el_simbolo_de_esa_fecha():
     t = G.Traductor(G.leer_ftd(FTD))
     assert t.simbolo("33616C100", pd.Timestamp("2023-04-01")) == "FRC"      # antes del cambio
@@ -113,6 +134,16 @@ def test_dura_hasta_el_siguiente_13f():
     s = r["1"].dropna()
     assert list(s.index[:3]) == list(pd.date_range("2024-03-31", periods=3, freq="ME"))
     assert s.index[3] == pd.Timestamp("2024-06-30") and len(s) == 3 + G.MESES_MAX   # el segundo entra en junio
+
+
+def test_un_13f_atrasado_de_un_periodo_viejo_no_sustituye_al_reciente():
+    reciente = _pos("1", "2024-02-14", [1.0] * 12)                                      # periodo 2023-12
+    viejo = _pos("1", "2024-03-05", [1.0] * 12, cusips=[f"C{j}" for j in range(11, -1, -1)])
+    viejo["periodo"] = pd.Timestamp("2023-06-30")                                       # atrasado
+    viejo["valor"] = [100.0] + [1.0] * 11                                               # otra cartera
+    r, cob = G.carteras(pd.concat([reciente, viejo]), _rent())
+    assert len(cob) == 1 and cob["presentado"].iloc[0] == pd.Timestamp("2024-02-14")
+    assert r.loc["2024-04-30", "1"] == pytest.approx(np.mean([0.01 * (j + 1) for j in range(12)]))
 
 
 def test_sin_cobertura_o_con_pocas_posiciones_no_entra():

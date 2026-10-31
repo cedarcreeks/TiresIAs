@@ -30,13 +30,30 @@ SEIS = B.SEIS
 
 
 # ── 1. los 13F ─────────────────────────────────────────────────────────────
-def _tsv(z: zipfile.ZipFile, nombre: str) -> pd.DataFrame:
-    """Una tabla del conjunto (`SUBMISSION`, `COVERPAGE`, `INFOTABLE`), sea cual sea su carpeta dentro del zip."""
+def _tsv(z: zipfile.ZipFile, nombre: str, columnas: list | None = None) -> pd.DataFrame:
+    """Una tabla del conjunto (`SUBMISSION`, `COVERPAGE`, `INFOTABLE`), sea cual sea su carpeta dentro del zip, con
+    las `columnas` pedidas. Falla si alguna línea no tiene tantos campos como la cabecera, o si no salen tantas filas
+    como líneas: una línea partida (un salto dentro de un campo) da dos filas rotas, y contar filas no la ve."""
     miembro = next((m for m in z.namelist() if m.upper().endswith(f"{nombre}.TSV")), None)
     if miembro is None:
         raise ValueError(f"el zip no trae {nombre}.tsv")
     with z.open(miembro) as f:
-        return pd.read_csv(f, sep="\t", dtype=str, keep_default_na=False, quoting=3, encoding="latin-1")
+        df = pd.read_csv(f, sep="\t", dtype=str, keep_default_na=False, quoting=3, encoding="latin-1",
+                         usecols=columnas)
+    cabecera, lineas, malas = None, 0, 0
+    with z.open(miembro) as f:
+        for linea in f:
+            if not linea.strip():
+                continue
+            if cabecera is None:
+                cabecera = linea.count(b"\t")
+                continue
+            lineas += 1
+            malas += linea.count(b"\t") != cabecera
+    if malas or lineas != len(df):
+        raise ValueError(f"{nombre}.tsv: {malas} líneas con otro número de campos que la cabecera "
+                         f"({lineas} líneas, {len(df)} filas leídas)")
+    return df
 
 
 def leer_13f(ruta) -> pd.DataFrame:
@@ -44,7 +61,8 @@ def leer_13f(ruta) -> pd.DataFrame:
     con `cik`, `periodo`, `presentado`, `emisor` y `valor` (suma de sus líneas). Sólo acciones (`SH`) y sin opciones.
     El valor sólo se usa para pesos dentro de cada 13F, así que el cambio de unidades de 2023 no afecta."""
     with zipfile.ZipFile(ruta) as z:
-        sub, cov, inf = _tsv(z, "SUBMISSION"), _tsv(z, "COVERPAGE"), _tsv(z, "INFOTABLE")
+        sub, cov = _tsv(z, "SUBMISSION"), _tsv(z, "COVERPAGE", ["ACCESSION_NUMBER", "REPORTTYPE"])
+        inf = _tsv(z, "INFOTABLE", ["ACCESSION_NUMBER", "NAMEOFISSUER", "CUSIP", "VALUE", "SSHPRNAMTTYPE", "PUTCALL"])
     sub = sub[sub["SUBMISSIONTYPE"].str.strip() == "13F-HR"]
     cov = cov[cov["REPORTTYPE"].str.strip().str.upper().isin({"13F HOLDINGS REPORT", "13F COMBINATION REPORT"})]
     sub = sub[sub["ACCESSION_NUMBER"].isin(set(cov["ACCESSION_NUMBER"]))]
@@ -66,14 +84,34 @@ def leer_13f(ruta) -> pd.DataFrame:
 
 # ── 2. CUSIP → símbolo, con fecha ────────────────────────────────────────────
 def leer_ftd(texto: str) -> pd.DataFrame:
-    """Un fichero de fails-to-deliver de la SEC (`SETTLEMENT DATE|CUSIP|SYMBOL|...`): (cusip, simbolo, fecha) únicos."""
-    df = pd.read_csv(pd.io.common.StringIO(texto), sep="|", dtype=str, keep_default_na=False, on_bad_lines="skip")
-    df.columns = [c.strip().upper() for c in df.columns]
-    df = df[df["SETTLEMENT DATE"].str.fullmatch(r"\d{8}") & (df["CUSIP"].str.strip().str.len() == 9)
-            & (df["SYMBOL"].str.strip() != "")]
-    out = pd.DataFrame({"cusip": df["CUSIP"].str.strip().str.upper(), "simbolo": df["SYMBOL"].str.strip().str.upper(),
-                        "fecha": pd.to_datetime(df["SETTLEMENT DATE"], format="%Y%m%d")})
-    return out.drop_duplicates()
+    """Un fichero de fails-to-deliver de la SEC (`SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY|DESCRIPTION|PRICE`):
+    (cusip, simbolo, fecha) únicos, de las filas con fecha, CUSIP de 9 caracteres y símbolo.
+
+    Las filas se cuentan contra la línea final del fichero («Trailer record count N») y una que no tenga sus seis
+    campos hace fallar la lectura: nada se salta en silencio. Una barra dentro de la descripción no rompe la fila
+    (sólo se usan los tres primeros campos). `attrs["declaradas"]`: el recuento final, o None si no lo trae."""
+    filas, declaradas = [], None
+    for i, linea in enumerate(texto.splitlines()):
+        linea = linea.strip()
+        if not linea or (i == 0 and linea.upper().startswith("SETTLEMENT DATE")):
+            continue
+        m = re.match(r"trailer record count\s+(\d+)", linea, re.I)
+        if m:
+            declaradas = int(m.group(1))
+            continue
+        if linea.lower().startswith("trailer"):
+            continue
+        partes = linea.split("|")
+        if len(partes) < 6:
+            raise ValueError(f"FTD, línea {i + 1} sin sus seis campos: {linea[:80]!r}")
+        filas.append((partes[1].strip().upper(), partes[2].strip().upper(), partes[0].strip()))
+    if declaradas is not None and declaradas != len(filas):
+        raise ValueError(f"FTD: {len(filas)} filas leídas y el fichero declara {declaradas}")
+    df = pd.DataFrame(filas, columns=["cusip", "simbolo", "fecha"])
+    df = df[df["fecha"].str.fullmatch(r"\d{8}") & (df["cusip"].str.len() == 9) & (df["simbolo"] != "")]
+    out = df.assign(fecha=pd.to_datetime(df["fecha"], format="%Y%m%d")).drop_duplicates().reset_index(drop=True)
+    out.attrs["declaradas"] = declaradas
+    return out
 
 
 class Traductor:
@@ -138,6 +176,11 @@ def carteras(posiciones: pd.DataFrame, rent: pd.DataFrame) -> tuple:
     R = rent.to_numpy()
     filas, cobertura = {}, []
     for cik, g in posiciones.groupby("cik"):
+        # un 13F atrasado de un periodo anterior al último ya presentado no trae una cartera nueva (se sabía otra más
+        # reciente): fuera, para que no sustituya a la buena con posiciones viejas
+        por_fecha = g.drop_duplicates("presentado")[["presentado", "periodo"]].sort_values("presentado")
+        vigentes = por_fecha[por_fecha["periodo"] > por_fecha["periodo"].cummax().shift(1, fill_value=pd.Timestamp.min)]
+        g = g[g["presentado"].isin(set(vigentes["presentado"]))]
         pres = sorted(g["presentado"].unique())
         entradas = [mes_de_entrada(pd.Timestamp(p)) for p in pres]
         for k, p in enumerate(pres):
