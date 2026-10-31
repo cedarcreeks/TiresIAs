@@ -147,9 +147,9 @@ def test_ventanas_de_precio_por_simbolo():
     import datetime as dt
     c = [{"ticker": "A", "presentado": dt.date(2020, 1, 15)}, {"ticker": "A", "presentado": dt.date(2021, 6, 1)},
          {"ticker": "B", "presentado": dt.date(2022, 3, 1)}]
-    v = C.ventanas_precios(c)
+    v = C.ventanas_precios(c, fin=dt.date(2022, 6, 30))
     assert v["A"] == (dt.date(2020, 1, 5), dt.date(2021, 6, 1) + dt.timedelta(days=192))
-    assert v["B"] == (dt.date(2022, 2, 19), dt.date(2022, 3, 1) + dt.timedelta(days=192))
+    assert v["B"] == (dt.date(2022, 2, 19), dt.date(2022, 6, 30))                 # nunca después del último día cerrado
 
 
 def test_rentabilidades_diarias_con_la_comprobacion_de_entidad():

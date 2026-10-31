@@ -222,16 +222,17 @@ def cartera_diaria(posiciones: list, elegidos: dict, ponderar: bool = True):
 
 
 # ── 6. los precios de las compras ────────────────────────────────────────────
-def ventanas_precios(compras: list, dias: int = DIAS_TENENCIA, margen: int = 10) -> dict:
+def ventanas_precios(compras: list, fin, dias: int = DIAS_TENENCIA, margen: int = 10) -> dict:
     """{símbolo: (desde, hasta)}: de unos días antes de su primera presentación (el cierre de partida) a su última
-    presentación más la tenencia y un margen (la entrada es el día de mercado siguiente)."""
+    presentación más la tenencia y un margen (la entrada es el día de mercado siguiente), y nunca después de `fin`, el
+    último día cerrado: Alpaca da 403 a todo el lote si se piden los últimos 15 min del SIP (pasó con fechas de 2027)."""
     import datetime as dt
     out = {}
     for c in compras:
         a = c["presentado"] - dt.timedelta(days=margen)
         b = c["presentado"] + dt.timedelta(days=dias + margen)
         x, y = out.get(c["ticker"], (a, b))
-        out[c["ticker"]] = (min(x, a), max(y, b))
+        out[c["ticker"]] = (min(x, a), min(max(y, b), fin))
     return out
 
 
