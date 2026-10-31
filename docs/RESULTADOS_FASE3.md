@@ -83,3 +83,26 @@ historial bate al índice.
 - La cuarta parte de las declaraciones, en papel, no se lee.
 - Con 3–5 elegidos por trimestre la cartera es muy concentrada.
 - La rentabilidad de las acciones de importes grandes pesa mucho al ponderar por el centro del tramo.
+
+### Exploratorio: ¿y Nancy Pelosi? (31-oct, a petición del user; no decide nada)
+
+Elegida **después** de saber que le ha ido bien, así que esto sólo puede ser exploratorio: con ese sesgo a favor.
+
+**Lo que copia**: sus 65 compras declaradas de acciones de 2016 a 2026, casi todas grandes tecnológicas (AAPL 13,
+MSFT 6, NVDA 6, AMZN 5, PYPL 5, FB 4). Cada una entra al día siguiente de presentarse y se mantiene 182 días.
+
+**Lo que no copia**: sus 32 compras de opciones (*calls* de AAPL, NVDA, AMZN…), las operaciones que más ruido hacen.
+Copiarlas desde la declaración exigiría saber el precio de ejercicio y el vencimiento, que no vienen en un formato
+fiable.
+
+| 2016-02 → 2026-08 (116 meses con posición) | Sharpe | CAGR |
+|---|---|---|
+| Copiar sus compras, ponderadas por importe | 0,62 | 16,7 % |
+| Copiar sus compras, a partes iguales | 0,83 | 23,9 % |
+| S&P 500 con dividendos | 0,78 | 13,7 % |
+| **Nasdaq-100 (QQQ)** | **0,90** | 19,2 % |
+
+Bate al S&P 500 porque es tecnología, y la tecnología batió al S&P 500 en esta década. **Frente a la vara justa, el
+Nasdaq-100, no aporta**: beta 1,16–1,18; alfa −3,0 % al año ponderada por importe (t −0,57) y +2,8 % a partes iguales
+(t 0,53), ninguna significativa. Su Sharpe queda por debajo del de QQQ en las dos ponderaciones. Copiar sus compras de
+acciones es, en la práctica, tener un Nasdaq-100 con algo más de riesgo, y eso eligiéndola a toro pasado.
