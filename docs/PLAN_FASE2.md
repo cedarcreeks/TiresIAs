@@ -74,9 +74,13 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
   la de presentación (`FILING_DATE`). De cada posición, sólo acciones (`SH`; fuera los importes de deuda, `PRN`) y sin
   opciones (`PUTCALL` vacío). El peso, por valor declarado dentro de cada 13F, así que el cambio de unidades de
   `VALUE` de 2023 (de miles de dólares a dólares) no afecta.
-- **CUSIP → símbolo**: OpenFIGI (la cotización de EE. UU.); lo que no traduzca, contra la lista de valores **inactivos**
-  de Alpaca por nombre normalizado del emisor, y una coincidencia ambigua se descarta. Se informa qué parte del valor
-  traduce cada vía.
+- **CUSIP → símbolo, con fecha** (corregido el 31-oct antes de bajar datos: la sonda mostró que OpenFIGI sólo da el
+  símbolo de hoy —Twitter y Activision, sin cotización de EE. UU.; First Republic, `FRCB` y no `FRC`— y que la lista
+  de inactivos de Alpaca no trae CUSIP ni incluye Twitter): **primero**, los ficheros de *fails-to-deliver* de la SEC,
+  quincenales y públicos, que traen CUSIP, símbolo y descripción en cada fecha: se usa el símbolo del fichero más
+  cercano **anterior** a la fecha de presentación del 13F (y, si no lo hay, el primero posterior dentro de 90 días);
+  **después**, OpenFIGI (la cotización compuesta de EE. UU.); **por último**, los inactivos de Alpaca por nombre
+  normalizado del emisor, descartando una coincidencia ambigua. Se informa qué parte del valor traduce cada vía.
 - **Precios**: Alpaca, diarios, ajustados por *splits* y dividendos (`adjustment=all`), desde 2016-01-01; entran los 13F
   presentados desde esa fecha.
 - **Cobertura mínima**: un gestor entra en un trimestre sólo si tiene precio el **≥ 90 %** del valor de sus acciones
