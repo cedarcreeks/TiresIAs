@@ -39,3 +39,11 @@ def test_el_pedido_agrupa_por_inicio_y_su_id_sale_del_contenido():
     assert F.pedido(rangos, cusips=[f"C{i}" for i in range(150)]) == p                   # mismo plan, mismos id
     otro = dict(rangos, S119=(D(2015, 6, 1), D(2017, 1, 1)))
     assert F.pedido(otro, cusips=[])["barras"][0]["id"] != p["barras"][0]["id"]
+
+
+def test_cobertura_de_la_traduccion_por_valor_y_trimestre():
+    pos = pd.DataFrame({"cik": ["1", "1", "2"], "cusip": ["A", "B", "A"], "valor": [3.0, 1.0, 4.0],
+                        "presentado": pd.to_datetime(["2016-02-14", "2016-02-14", "2016-05-15"])})
+    trad = G.Traductor(pd.DataFrame({"cusip": ["A"], "simbolo": ["AA"], "fecha": pd.to_datetime(["2016-01-04"])}))
+    c = F.cobertura_traduccion(pos, trad)
+    assert list(c["cobertura"]) == [0.75, 1.0] and list(c["gestores"]) == [1, 1]

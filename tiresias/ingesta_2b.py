@@ -36,9 +36,11 @@ def ftd(rutas: list) -> tuple:
     partes, informe = [], []
     for r in sorted(rutas):
         with zipfile.ZipFile(r) as z:
-            miembros = [m for m in z.namelist() if m.lower().endswith(".txt")]
+            # uno solo, con o sin extensión (desde mediados de 2022 algunos vienen sin «.txt»); si hay varios, un .txt
+            todos = z.namelist()
+            miembros = todos if len(todos) == 1 else [m for m in todos if m.lower().endswith(".txt")]
             if len(miembros) != 1:
-                raise ValueError(f"{r.name}: se esperaba un .txt y hay {miembros}")
+                raise ValueError(f"{r.name}: se esperaba un fichero de datos y hay {todos}")
             texto = z.read(miembros[0]).decode("latin-1")
         t = G.leer_ftd(texto)
         partes.append(t)

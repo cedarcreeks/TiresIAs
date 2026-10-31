@@ -28,6 +28,19 @@ def test_ftd_une_ficheros_sin_duplicados_y_con_su_informe(tmp_path):
     assert [x["filas"] for x in informe] == [2, 2] and [x["declaradas"] for x in informe] == [2, 2]
 
 
+def test_un_ftd_sin_extension_vale_y_dos_ficheros_sin_txt_no(tmp_path):
+    f = tmp_path / "cnsfails202205b.zip"
+    with zipfile.ZipFile(f, "w") as z:
+        z.writestr("cnsfails202205b", CAB + "20220516|037833100|AAPL|10|APPLE INC|145\nTrailer record count 1\n")
+    assert len(I.ftd([f])[0]) == 1
+    g = tmp_path / "cnsfails202206b.zip"
+    with zipfile.ZipFile(g, "w") as z:
+        z.writestr("a", "x")
+        z.writestr("b", "y")
+    with pytest.raises(ValueError, match="un fichero de datos"):
+        I.ftd([g])
+
+
 def test_un_ftd_que_no_cuadra_con_su_recuento_para(tmp_path):
     with pytest.raises(ValueError, match="declara"):
         I.ftd([_ftd(tmp_path, "cnsfails202301a.zip", ["20230103|037833100|AAPL|10|APPLE INC|125\n"], declaradas=5)])

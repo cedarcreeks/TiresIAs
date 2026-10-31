@@ -64,3 +64,46 @@ def pedido(rangos: dict, cusips: list, modos=("all", "raw", "tal_cual"), desde_a
             acciones.append({"id": _id(campo, tuple(lote)), campo: lote, "desde": desde_acciones,
                              "hasta": hasta_acciones})
     return {"barras": barras, "acciones": acciones}
+
+
+# ── 4. la preparación, de los zips al pedido de la primera pasada ─────────────
+def cobertura_traduccion(posiciones: pd.DataFrame, traductor) -> pd.DataFrame:
+    """Por trimestre de presentación: la parte del valor de las posiciones con símbolo en su fecha de presentación
+    (una cota superior de la cobertura con precio, que exige además el precio)."""
+    pares = posiciones[["cusip", "presentado"]].drop_duplicates()
+    pares = pares.assign(simbolo=[traductor.simbolo(c, p) for c, p in zip(pares["cusip"], pares["presentado"])])
+    p = posiciones.merge(pares, on=["cusip", "presentado"])
+    p = p.assign(trimestre=p["presentado"].dt.to_period("Q"), con=p["simbolo"].notna() * p["valor"])
+    g = p.groupby("trimestre").agg(valor=("valor", "sum"), con=("con", "sum"), gestores=("cik", "nunique"),
+                                   cusips=("cusip", "nunique"))
+    return g.assign(cobertura=g["con"] / g["valor"])[["gestores", "cusips", "cobertura"]]
+
+
+def preparar(crudo, derivado, fin_datos: dt.date) -> dict:
+    """FTD y 13F de `crudo/archivo_sec/{ftd,13f}` (y `crudo/sec_directo`, si trae alguno que falte) a `derivado/`:
+    `ftd.parquet`, `13f/*.parquet`, `cobertura_traduccion.csv` y `pedido_1.json`. Devuelve un resumen."""
+    import json
+    import pathlib
+    from tiresias import ingesta_2b as I
+    from tiresias import precios as P
+    crudo, derivado = pathlib.Path(crudo), pathlib.Path(derivado)
+    derivado.mkdir(parents=True, exist_ok=True)
+    def zips(patron):
+        por_nombre = {f.name: f for f in sorted((crudo / "sec_directo").glob(patron))}
+        por_nombre.update({f.name: f for f in sorted((crudo / "archivo_sec").rglob(patron))})
+        return list(por_nombre.values())
+    tabla, informe = I.ftd(zips("cnsfails*.zip"))
+    tabla.to_parquet(derivado / "ftd.parquet", index=False)
+    pos = I.posiciones(I.trece_f([f for f in zips("*form13f.zip") if not f.name.startswith("2015")], derivado / "13f"))
+    trad = G.Traductor(tabla)
+    cob = cobertura_traduccion(pos, trad)
+    cob.to_csv(derivado / "cobertura_traduccion.csv")
+    simb, _ = registros(tabla)
+    v = ventanas(pos, fin_datos)
+    por_cusip, rangos = P.plan(v, simb, {})
+    ped = pedido(rangos, sorted(por_cusip))
+    (derivado / "pedido_1.json").write_text(json.dumps(ped, default=str))
+    return {"ftd_ficheros": len(informe), "ftd_registros": len(tabla), "posiciones": len(pos),
+            "gestores": int(pos["cik"].nunique()), "cusips": len(v), "cusips_con_tramos": len(por_cusip),
+            "simbolos": len(rangos), "lotes_barras": len(ped["barras"]), "lotes_acciones": len(ped["acciones"]),
+            "cobertura_min": float(cob["cobertura"].min()), "cobertura_mediana": float(cob["cobertura"].median())}
