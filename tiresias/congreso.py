@@ -70,7 +70,6 @@ import re  # noqa: E402
 # Las de 2016 traen las mayúsculas rotas por la fuente del PDF («(BaX)», «s» por S) y días de una cifra («09/7/2016»)
 _FECHAS = re.compile(r"\s([PSE]|S \(partial\))\s+(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(.*)$", re.I)
 _TICKER = re.compile(r"\(([A-Za-z][A-Za-z0-9.\-]{0,6})\)")
-_NO_TICKER = {"PARTIAL"}
 _CLASE = re.compile(r"\[([A-Z]{2})\]")
 _IMPORTE = re.compile(r"\$([\d,]+)")
 # los tramos legales de importe: el mínimo de cada tramo y su máximo
@@ -98,7 +97,7 @@ def operaciones(texto: str) -> list:
         arriba = [lineas[k] for k in (i - 1, i - 2) if k > previa]
         abajo = [lineas[k] for k in (i + 1, i + 2) if k < siguiente]
         def tickers(x):
-            return [s.upper() for s in _TICKER.findall(x) if s.upper() not in _NO_TICKER]
+            return [s.upper() for s in _TICKER.findall(x)]
         # en su línea, o en las de arriba (el nombre partido), o en las de abajo (el símbolo partido: «(FOXa)»)
         tick = tickers(antes) or [s for x in arriba for s in tickers(x)][:1] or [s for x in abajo for s in tickers(x)][:1]
         clase = _CLASE.findall(linea) or [c for x in abajo for c in _CLASE.findall(x)][:1]
