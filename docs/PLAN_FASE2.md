@@ -90,7 +90,10 @@ Añadido tras el control 2A y antes de descargar ningún 13F ni ningún precio d
   si ninguna cuadra, ese CUSIP no tiene precio. Un tramo sin registros con precio se informa aparte.
   **Contraste** (añadido el 31-oct, antes de bajar ningún 13F): los *corporate actions* de Alpaca llevan CUSIP y
   símbolo con fecha (dividendos, *splits*, cambios de nombre, fusiones); donde coincidan con un FTD, se informa la
-  concordancia de las dos traducciones, y un CUSIP en que discrepen no entra.
+  concordancia de las dos traducciones, y un CUSIP en que discrepen no entra. **Concretado el 31-oct, antes de ver ningún corporate
+  action de 2B**: se comparan los eventos con CUSIP explícito contra el símbolo del FTD de ese CUSIP en esa fecha, sin
+  puntos (BRK.B = BRKB) y no a menos de 30 días de un cambio de símbolo en el FTD (que llega hasta dos semanas tarde);
+  una sola discrepancia deja fuera el CUSIP.
 - **Precios**: Alpaca, diarios, desde 2016-01-01; entran los 13F presentados desde esa fecha. **Corregido el 31-oct,
   antes de bajar ningún precio de 2B**, por lo que midió la sonda (27 valores, 2016-2026):
   - `adjustment=all` con `asof` mezcla ajustes: FB con `asof=2020-01-02` da +83,4 % en 2024–2026, y +79,3 % con precios

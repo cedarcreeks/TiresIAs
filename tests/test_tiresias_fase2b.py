@@ -155,3 +155,18 @@ def test_de_punta_a_punta_con_datos_sinteticos(tmp_path):
     # sin precio para casi nada, para antes de elegir a nadie
     j3 = F.juicio(pos, r["rent"][["C00", "C01"]], Fac, sp, reps=2)
     assert j3["parada"]["para"] and "receta" not in j3
+
+
+def test_contraste_con_los_corporate_actions():
+    simb = {"A": [(D(2016, 1, 4), "BRKB")], "B": [(D(2016, 1, 4), "OLD"), (D(2016, 6, 1), "NEW")],
+            "C": [(D(2016, 1, 4), "X")]}
+    acc = {"cash_dividends": [
+        {"cusip": "A", "symbol": "BRK.B", "ex_date": "2016-03-01"},           # coincide sin el punto
+        {"cusip": "B", "symbol": "NEW", "ex_date": "2016-05-20"},             # cerca del cambio: no se compara
+        {"cusip": "B", "symbol": "NEW", "ex_date": "2016-09-01"},             # coincide
+        {"cusip": "C", "symbol": "Y", "ex_date": "2016-03-01"},               # discrepa
+        {"cusip": None, "symbol": "X", "ex_date": "2016-03-01"},              # sin CUSIP: no se compara
+        {"cusip": "C", "symbol": "X", "ex_date": "2015-12-01"}],              # antes del primer FTD: no
+        "cash_mergers": [{"acquiree_cusip": "A", "acquiree_symbol": "BRKB", "effective_date": "2016-04-01"}]}
+    r = F.contraste_ca(acc, simb)
+    assert r["comparados"] == 4 and r["coinciden"] == 3 and r["discrepan"] == {"C": [(D(2016, 3, 1), "Y", "X")]}
