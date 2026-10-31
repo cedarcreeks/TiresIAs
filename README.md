@@ -9,7 +9,7 @@
 ![fase](https://img.shields.io/badge/fase_2-en_curso-yellow?style=flat-square)
 ![criterios](https://img.shields.io/badge/criterios-pre--registrados-blueviolet?style=flat-square)
 ![fase 1](https://img.shields.io/badge/fase_1_(Kronos)-cerrada:_no_aporta-lightgrey?style=flat-square)
-![python](https://img.shields.io/badge/python-3.13-3776AB?style=flat-square&logo=python&logoColor=white)
+![python](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![licencia](https://img.shields.io/badge/licencia-MIT-green?style=flat-square)
 
 </div>
@@ -50,8 +50,8 @@ flowchart LR
 | fase | pregunta | estado | resultado |
 |---|---|---|---|
 | **1** | ¿Predice Kronos (un modelo fundacional de velas) algo útil, fuera de su entrenamiento y con costes? | ✅ cerrada, 29-oct-2026 | **No.** Ronda 1: no aporta en ningún horizonte. Ronda 2: 0 de 5 criterios, ninguno sobrevive a Holm, ni reentrenado como sus autores ([resultados](docs/RESULTADOS_RONDA2.md)) |
-| **2A** | ¿Se reproduce la tabla 4 de *Buffett's Alpha* con datos públicos? (el control) | 🟡 en curso | — |
-| **2A′** | ¿Sigue viva la receta de Buffett después de publicarse (2012 →)? | ⏳ | — |
+| **2A** | ¿Se reproduce la tabla 4 de *Buffett's Alpha* con datos públicos? (el control) | ✅ 31-oct-2026 | **Sí, 3 de 3.** BAB 0,29 [0,29], QMJ 0,47 [0,43]; el alfa pasa de 10,0 % (t 2,68) a 4,0 % (t 1,02) con los seis factores. HML, en el borde ([resultados](docs/RESULTADOS_FASE2A.md)) |
+| **2A′** | ¿Sigue viva la receta de Buffett después de publicarse (2012 →)? | 🟡 siguiente | — |
 | **2B** | ¿La receta de los mejores gestores, elegidos sin mirar al futuro, bate al S&P 500? | ⏳ | — |
 | **2C** | ¿Y hecha con ETF que se pueden comprar, con costes e impuestos? | ⏳ sólo si 2B pasa | — |
 
@@ -87,8 +87,9 @@ model/, finetune/, finetune_csv/, examples/, webui/   código de Kronos (MIT), p
 ## Reproducir
 
 ```bash
-python3.13 -m venv ~/.venvs/tiresias && source ~/.venvs/tiresias/bin/activate
+python3.12 -m venv ~/.venvs/tiresias && source ~/.venvs/tiresias/bin/activate
 pip install -r requirements.txt
+python -m tiresias.buffett   # fase 2A (los datos, en ~/tiresias_datos/fase2/crudo: ver docs/RESULTADOS_FASE2A.md)
 python -m pytest tests      # desde la raíz recogería finetune/, que importa qlib y no corre
 ```
 
