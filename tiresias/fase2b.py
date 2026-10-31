@@ -89,8 +89,10 @@ def preparar(crudo, derivado, fin_datos: dt.date) -> dict:
     crudo, derivado = pathlib.Path(crudo), pathlib.Path(derivado)
     derivado.mkdir(parents=True, exist_ok=True)
     def zips(patron):
-        por_nombre = {f.name: f for f in sorted((crudo / "sec_directo").glob(patron))}
-        por_nombre.update({f.name: f for f in sorted((crudo / "archivo_sec").rglob(patron))})
+        # la copia bajada de la SEC manda sobre la del archivo: la SEC regeneró los conjuntos antiguos de 13F el
+        # 15-feb-2024 (2016q1: FIGI y 3 presentaciones más), y una captura anterior es la versión vieja
+        por_nombre = {f.name: f for f in sorted((crudo / "archivo_sec").rglob(patron))}
+        por_nombre.update({f.name: f for f in sorted((crudo / "sec_directo").glob(patron))})
         return list(por_nombre.values())
     tabla, informe = I.ftd(zips("cnsfails*.zip"))
     tabla.to_parquet(derivado / "ftd.parquet", index=False)
