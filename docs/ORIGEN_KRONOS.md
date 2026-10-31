@@ -1,3 +1,5 @@
+> **Constancia del origen.** TiresIAs empezó el 27-oct-2026 como fork de [Kronos](https://github.com/shiyu-coder/Kronos) (MIT) para evaluarlo; la fase 1 lo cerró (0 de 5, [RESULTADOS_RONDA2.md](RESULTADOS_RONDA2.md)). Este es su README original, sin tocar; su código sigue en `model/`, `finetune/`, `finetune_csv/`, `examples/` y `webui/`, bajo su licencia, para que la fase 1 se pueda reproducir. Las rutas relativas de abajo son las del repo de Kronos.
+
 <div align="center">
   <h2><b>Kronos: A Foundation Model for the Language of Financial Markets </b></h2>
 </div>
