@@ -161,3 +161,31 @@ def test_rentabilidades_diarias_con_la_comprobacion_de_entidad():
     series = {"all": {"A": b, "Z": otra}, "raw": {"A": b, "Z": otra}, "tal_cual": {"A": b, "Z": b}}
     r, cam = C.rentabilidades_diarias({"A": (f[0], f[-1]), "Z": (f[0], f[-1])}, series, P.IndiceAcciones({}))
     assert cam == {"A": "alpaca", "Z": "reconstruida"} and r["A"][f[1]] == pytest.approx(0.01)
+
+
+def test_juicio_3c_con_un_congresista_que_acierta_y_otros_al_azar():
+    """Sintético: el miembro «Bueno» compra lo que sube; el resto, ruido. El decil superior debe ser él y ganar."""
+    import datetime as dt
+    import numpy as np
+    import pandas as pd
+    rng = np.random.default_rng(3)
+    dias = pd.bdate_range("2016-01-04", "2022-12-30").date
+    posiciones = []
+    for m in ["Bueno"] + [f"M{i}" for i in range(19)]:
+        for k in range(40):
+            pres = dias[rng.integers(0, len(dias) - 200)]
+            ent = [d for d in dias if d > pres][0]
+            r = {d: (0.002 if m == "Bueno" else rng.normal(0, 0.01)) for d in dias if ent < d <= ent + dt.timedelta(days=182)}
+            posiciones.append({"miembro": m, "presentado": pres, "entrada": ent, "salida": ent + dt.timedelta(days=182),
+                               "peso": 1.0, "r": r, "total": float(np.prod([1 + x for x in r.values()]) - 1)})
+    trimestres = [C.fin_trimestre(d) for d in pd.date_range("2018-03-31", "2022-09-30", freq="QE").date]
+    meses = pd.date_range("2016-01-31", "2022-12-31", freq="ME")
+    sp = pd.Series(0.005, index=meses) + pd.Series(rng.normal(0, 0.03, len(meses)), index=meses)
+    rf = pd.Series(0.001, index=meses)
+    nanc = sp.loc["2021-01-31":]
+    j = C.juicio(posiciones, trimestres, sp, rf, nanc, reps=20)
+    assert all("Bueno" in s for s in [C.decil_superior(C.historial(posiciones, q)) for q in trimestres[2:]])
+    assert j["copia"]["sharpe"] > j["placebo_p95"] and j["criterios"]["2_sobre_el_placebo_p95"]
+    # el placebo es elegir al azar: 20 carteras, con una mediana de ruido (no un valor fijo ni absurdo)
+    assert j["placebo_n"] == 20 and -2 < j["placebo_mediana"] < j["copia"]["sharpe"]
+    assert set(j["criterios"]) == {"1_frente_al_sp500_en_las_dos_mitades", "2_sobre_el_placebo_p95", "3_sobre_nanc"}

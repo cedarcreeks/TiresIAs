@@ -51,7 +51,7 @@ Plans: [phase 2](docs/PLAN_FASE2.md) · [phase 3](docs/PLAN_FASE3.md). Documents
 ```bash
 python3.12 -m venv ~/.venvs/tiresias && source ~/.venvs/tiresias/bin/activate
 pip install -r requirements.txt
-python -m pytest tests        # 197 tests
+python -m pytest tests        # 198 tests
 python -m tiresias.buffett     # phases 2A and 2A′
 ```
 

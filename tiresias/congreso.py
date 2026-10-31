@@ -247,3 +247,78 @@ def rentabilidades_diarias(ventanas: dict, series: dict, indice) -> tuple:
         if r:
             out[s] = r
     return out, caminos
+
+
+# ── 7. el juicio de 3C ───────────────────────────────────────────────────────
+DECIL, REPS = 0.10, 200
+
+
+def elecciones(posiciones: list, trimestres: list, elegir) -> dict:
+    """{fin de trimestre: conjunto elegido} con `elegir(historial) -> conjunto`."""
+    return {q: set(elegir(historial(posiciones, q))) for q in trimestres}
+
+
+def decil_superior(hist: dict) -> set:
+    orden = sorted(hist, key=lambda m: hist[m], reverse=True)
+    return set(orden[:max(1, round(len(orden) * DECIL))]) if orden else set()
+
+
+def azar(semilla: int):
+    import random
+    rng = random.Random(semilla)
+
+    def f(hist):
+        miembros = sorted(hist)
+        n = max(1, round(len(miembros) * DECIL)) if miembros else 0
+        return set(rng.sample(miembros, n)) if n else set()
+    return f
+
+
+def mensual(diaria):
+    """Rentabilidad mensual (fin de mes) compuesta de las diarias."""
+    import pandas as pd
+    s = diaria.copy()
+    s.index = pd.to_datetime(s.index)
+    return (1 + s).groupby(s.index.to_period("M")).prod().sub(1).to_timestamp("M")
+
+
+def juicio(posiciones: list, trimestres: list, sp, rf, nanc, reps: int = REPS, ponderar: bool = True) -> dict:
+    """Los tres criterios de 3C: frente al S&P 500 (Sharpe +0,10 y CAGR +1 pp en las dos mitades), por encima del p95
+    del placebo (congresistas al azar, `reps` veces) y por encima de NANC en el periodo común."""
+    from tiresias import gestores as G
+    eleg = elecciones(posiciones, trimestres, decil_superior)
+    copia = mensual(cartera_diaria(posiciones, eleg, ponderar))
+    idx = copia.index.intersection(sp.index).intersection(rf.index)
+    c_ex, s_ex = copia.loc[idx] - rf.loc[idx], sp.loc[idx] - rf.loc[idx]
+    mitad = idx[len(idx) // 2]
+
+    def gana(a, b):
+        ma, mb = G.metricas(a, rf), G.metricas(b, rf)
+        return ma["sharpe"] - mb["sharpe"] >= 0.10 and ma["cagr"] - mb["cagr"] >= 0.01
+    plac = []
+    for s in range(reps):
+        m = mensual(cartera_diaria(posiciones, elecciones(posiciones, trimestres, azar(s)), ponderar))
+        m = m.loc[m.index.intersection(idx)]
+        if len(m) > 12:
+            plac.append(G.metricas(m - rf.loc[m.index], rf)["sharpe"])
+    sh = G.metricas(c_ex, rf)["sharpe"]
+    comun = idx.intersection(nanc.index)
+    sh_c, sh_n = (G.metricas(c_ex.loc[comun], rf)["sharpe"], G.metricas(nanc.loc[comun] - rf.loc[comun], rf)["sharpe"]) \
+        if len(comun) > 12 else (float("nan"), float("nan"))
+    import numpy as np
+    crit = {"1_frente_al_sp500_en_las_dos_mitades": gana(c_ex.loc[:mitad - pd_mes()], s_ex.loc[:mitad - pd_mes()])
+            and gana(c_ex.loc[mitad:], s_ex.loc[mitad:]),
+            "2_sobre_el_placebo_p95": bool(plac) and sh > float(np.percentile(plac, 95)),
+            "3_sobre_nanc": bool(sh_c == sh_c and sh_c > sh_n)}
+    return {"meses": [str(idx.min().date()), str(idx.max().date()), int(len(idx))],
+            "copia": G.metricas(c_ex, rf), "sp500": G.metricas(s_ex, rf),
+            "placebo_n": len(plac), "placebo_mediana": float(np.median(plac)) if plac else None,
+            "placebo_p95": float(np.percentile(plac, 95)) if plac else None,
+            "nanc_comun": {"meses": int(len(comun)), "copia_sharpe": sh_c, "nanc_sharpe": sh_n},
+            "elegidos_por_trimestre": [len(eleg[q]) for q in trimestres],
+            "criterios": crit, "cumplidos": int(sum(crit.values())), "pasa": all(crit.values())}
+
+
+def pd_mes():
+    import pandas as pd
+    return pd.offsets.MonthEnd(1)
